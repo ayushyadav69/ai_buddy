@@ -43,7 +43,7 @@ class FriendModel {
   final String systemPrompt;
 
   @HiveField(12)
-  final SyncStatus syncStatus;
+  final String syncStatusValue;
 
   @HiveField(13)
   final DateTime createdAt;
@@ -67,11 +67,18 @@ class FriendModel {
     required this.avatarType,
     required this.voiceType,
     required this.systemPrompt,
-    required this.syncStatus,
+    required this.syncStatusValue,
     required this.createdAt,
     required this.updatedAt,
     this.deletedAt,
   });
+
+  SyncStatus get syncStatus {
+    return SyncStatus.values.firstWhere(
+      (status) => status.name == syncStatusValue,
+      orElse: () => SyncStatus.failed,
+    );
+  }
 
   factory FriendModel.fromEntity(FriendEntity entity) {
     return FriendModel(
@@ -87,7 +94,7 @@ class FriendModel {
       avatarType: entity.avatarType,
       voiceType: entity.voiceType,
       systemPrompt: entity.systemPrompt,
-      syncStatus: entity.syncStatus,
+      syncStatusValue: entity.syncStatus.name,
       createdAt: entity.createdAt,
       updatedAt: entity.updatedAt,
       deletedAt: entity.deletedAt,
@@ -146,7 +153,7 @@ class FriendModel {
       avatarType: avatarType ?? this.avatarType,
       voiceType: voiceType ?? this.voiceType,
       systemPrompt: systemPrompt ?? this.systemPrompt,
-      syncStatus: syncStatus ?? this.syncStatus,
+      syncStatusValue: syncStatus?.name ?? syncStatusValue,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       deletedAt: deletedAt ?? this.deletedAt,

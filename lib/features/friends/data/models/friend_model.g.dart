@@ -29,7 +29,7 @@ class FriendModelAdapter extends TypeAdapter<FriendModel> {
       avatarType: fields[9] as String,
       voiceType: fields[10] as String,
       systemPrompt: fields[11] as String,
-      syncStatus: fields[12] as SyncStatus,
+      syncStatusValue: fields[12] as String,
       createdAt: fields[13] as DateTime,
       updatedAt: fields[14] as DateTime,
       deletedAt: fields[15] as DateTime?,
@@ -65,7 +65,7 @@ class FriendModelAdapter extends TypeAdapter<FriendModel> {
       ..writeByte(11)
       ..write(obj.systemPrompt)
       ..writeByte(12)
-      ..write(obj.syncStatus)
+      ..write(obj.syncStatusValue)
       ..writeByte(13)
       ..write(obj.createdAt)
       ..writeByte(14)
