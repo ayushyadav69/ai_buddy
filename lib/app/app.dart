@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:ai_buddy/core/constants/app_constants.dart';
 
 class AiBuddyApp extends StatelessWidget {
   const AiBuddyApp({super.key});
@@ -6,7 +7,7 @@ class AiBuddyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'AI Buddy',
+      title: AppConstants.appName,
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
