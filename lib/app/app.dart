@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:ai_buddy/core/constants/app_constants.dart';
+import 'package:ai_buddy/features/friends/presentation/screens/friend_list_screen.dart';
 
 class AiBuddyApp extends StatelessWidget {
   const AiBuddyApp({super.key});
@@ -13,11 +14,7 @@ class AiBuddyApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
         useMaterial3: true,
       ),
-      home: const Scaffold(
-        body: Center(
-          child: Text('AI Buddy Setup Done', style: TextStyle(fontSize: 22)),
-        ),
-      ),
+      home: const FriendListScreen(),
     );
   }
 }
