@@ -1,6 +1,7 @@
 import 'package:ai_buddy/core/constants/app_constants.dart';
 import 'package:ai_buddy/features/friends/presentation/providers/friend_providers.dart';
 import 'package:ai_buddy/features/friends/presentation/screens/friend_form_screen.dart';
+import 'package:ai_buddy/features/friends/presentation/screens/friend_profile_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -71,12 +72,18 @@ class _FriendListScreenState extends ConsumerState<FriendListScreen> {
                 title: Text(friend.name),
                 subtitle: Text(friend.role),
                 trailing: const Icon(Icons.chevron_right),
-                onTap: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('${friend.name} chat will open later.'),
+                onTap: () async {
+                  final shouldReload = await Navigator.of(context).push<bool>(
+                    MaterialPageRoute(
+                      builder: (_) => FriendProfileScreen(friendId: friend.id),
                     ),
                   );
+
+                  if (shouldReload == true && context.mounted) {
+                    ref
+                        .read(friendListViewModelProvider.notifier)
+                        .loadFriends(userId: AppConstants.devUserId);
+                  }
                 },
               );
             },
