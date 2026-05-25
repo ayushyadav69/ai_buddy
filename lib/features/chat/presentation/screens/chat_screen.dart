@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:ai_buddy/features/buddy/presentation/controllers/buddy_providers.dart';
 import 'package:ai_buddy/features/buddy/presentation/widgets/buddy_stage.dart';
+import 'package:ai_buddy/features/chat/presentation/viewmodels/chat_viewmodel.dart';
 
 class ChatScreen extends ConsumerStatefulWidget {
   final String friendId;
@@ -57,7 +58,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
     buddyController.setThinking();
 
-    await ref
+    final buddyMessage = await ref
         .read(chatViewModelProvider.notifier)
         .sendTextMessage(
           userId: AppConstants.devUserId,
@@ -65,21 +66,21 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           text: text,
         );
 
-    final chatState = ref.read(chatViewModelProvider);
-    final buddyMessages = chatState.messages.where(
-      (message) => message.sender == MessageSender.buddy,
+    if (!mounted) {
+      return;
+    }
+
+    if (buddyMessage == null) {
+      buddyController.setIdle();
+      return;
+    }
+
+    buddyController.setTalking(
+      reply: buddyMessage.text,
+      emotion: buddyMessage.emotion ?? 'neutral',
     );
 
-    if (buddyMessages.isNotEmpty) {
-      final latestBuddyMessage = buddyMessages.last;
-
-      buddyController.setTalking(
-        reply: latestBuddyMessage.text,
-        emotion: latestBuddyMessage.emotion ?? 'neutral',
-      );
-
-      await Future<void>.delayed(const Duration(seconds: 2));
-    }
+    await Future<void>.delayed(const Duration(seconds: 2));
 
     if (!mounted) {
       return;
@@ -91,6 +92,17 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(chatViewModelProvider);
+    ref.listen<ChatState>(chatViewModelProvider, (previous, next) {
+      final errorMessage = next.errorMessage;
+
+      if (errorMessage == null || errorMessage == previous?.errorMessage) {
+        return;
+      }
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(errorMessage)));
+    });
     final buddyState = ref.watch(buddyStateControllerProvider);
 
     return Scaffold(
@@ -103,10 +115,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               builder: (context) {
                 if (state.isLoading) {
                   return const Center(child: CircularProgressIndicator());
-                }
-
-                if (state.errorMessage != null) {
-                  return Center(child: Text(state.errorMessage!));
                 }
 
                 if (state.messages.isEmpty) {
