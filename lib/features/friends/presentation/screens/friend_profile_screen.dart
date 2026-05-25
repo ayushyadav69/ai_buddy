@@ -1,6 +1,7 @@
 import 'package:ai_buddy/features/friends/presentation/providers/friend_providers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:ai_buddy/features/chat/presentation/screens/chat_screen.dart';
 
 class FriendProfileScreen extends ConsumerStatefulWidget {
   final String friendId;
@@ -113,6 +114,21 @@ class _FriendProfileScreenState extends ConsumerState<FriendProfileScreen> {
               ),
               _ProfileItem(title: 'Boundaries', value: friend.boundaries),
               _ProfileItem(title: 'Sync Status', value: friend.syncStatus.name),
+              const SizedBox(height: 16),
+              FilledButton.icon(
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => ChatScreen(
+                        friendId: friend.id,
+                        friendName: friend.name,
+                      ),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.chat_bubble_outline),
+                label: const Text('Open Chat'),
+              ),
               const SizedBox(height: 16),
               ExpansionTile(
                 title: const Text('System Prompt'),

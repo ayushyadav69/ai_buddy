@@ -11,11 +11,12 @@ import 'package:ai_buddy/features/friends/domain/usecases/get_friends_usecase.da
 import 'package:ai_buddy/features/friends/domain/usecases/update_friend_usecase.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_ce_flutter/hive_flutter.dart';
-import 'package:uuid/uuid.dart';
+// import 'package:ai_buddy/core/providers/core_providers.dart';
+// import 'package:uuid/uuid.dart';
 
-final uuidProvider = Provider<Uuid>((ref) {
-  return const Uuid();
-});
+// final uuidProvider = Provider<Uuid>((ref) {
+//   return const Uuid();
+// });
 
 final friendBoxProvider = Provider<Box<FriendModel>>((ref) {
   return Hive.box<FriendModel>(HiveBoxNames.friends);

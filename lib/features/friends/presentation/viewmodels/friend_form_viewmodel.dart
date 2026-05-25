@@ -2,6 +2,7 @@ import 'package:ai_buddy/core/sync/sync_status.dart';
 import 'package:ai_buddy/features/friends/domain/entities/friend_entity.dart';
 import 'package:ai_buddy/features/friends/presentation/providers/friend_dependency_providers.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:ai_buddy/core/providers/core_providers.dart';
 
 class FriendFormState {
   final bool isLoading;
