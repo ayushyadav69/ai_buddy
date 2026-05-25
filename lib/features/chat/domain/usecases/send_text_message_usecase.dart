@@ -5,18 +5,22 @@ import 'package:ai_buddy/features/chat/domain/entities/message_status.dart';
 import 'package:ai_buddy/features/chat/domain/repositories/chat_repository.dart';
 import 'package:ai_buddy/features/friends/domain/repositories/friend_repository.dart';
 import 'package:uuid/uuid.dart';
+import 'package:ai_buddy/features/memory/domain/entities/friend_memory_entity.dart';
+import 'package:ai_buddy/features/memory/domain/repositories/memory_repository.dart';
 
 class SendTextMessageUseCase {
   final ChatRepository chatRepository;
   final FriendRepository friendRepository;
   final AiRepository aiRepository;
   final Uuid uuid;
+  final MemoryRepository memoryRepository;
 
   const SendTextMessageUseCase({
     required this.chatRepository,
     required this.friendRepository,
     required this.aiRepository,
     required this.uuid,
+    required this.memoryRepository,
   });
 
   Future<MessageEntity> execute({
@@ -75,6 +79,26 @@ class SendTextMessageUseCase {
     );
 
     await chatRepository.saveMessage(buddyMessage);
+
+    final memoryCandidate = aiReply.memoryCandidate;
+
+    if (memoryCandidate.canBeSaved) {
+      final memoryTime = DateTime.now();
+
+      final memory = FriendMemoryEntity(
+        id: uuid.v4(),
+        userId: userId,
+        friendId: friendId,
+        text: memoryCandidate.text.trim(),
+        category: memoryCandidate.category,
+        importance: memoryCandidate.importance,
+        syncStatus: SyncStatus.pendingCreate,
+        createdAt: memoryTime,
+        updatedAt: memoryTime,
+      );
+
+      await memoryRepository.saveMemory(memory);
+    }
 
     return buddyMessage;
   }

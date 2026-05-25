@@ -15,6 +15,7 @@ import 'package:ai_buddy/features/chat/data/models/message_model.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_ce_flutter/hive_flutter.dart';
+import 'package:ai_buddy/features/memory/data/models/friend_memory_model.dart';
 
 void main() {
   late Directory tempDir;
@@ -36,9 +37,14 @@ void main() {
       Hive.registerAdapter(MessageModelAdapter());
     }
 
+    if (!Hive.isAdapterRegistered(4)) {
+      Hive.registerAdapter(FriendMemoryModelAdapter());
+    }
+
     await Hive.openBox<FriendModel>(HiveBoxNames.friends);
     await Hive.openBox<ChatModel>(HiveBoxNames.chats);
     await Hive.openBox<MessageModel>(HiveBoxNames.messages);
+    await Hive.openBox<FriendMemoryModel>(HiveBoxNames.memories);
   });
 
   tearDown(() async {

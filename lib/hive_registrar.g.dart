@@ -6,10 +6,12 @@ import 'package:hive_ce/hive_ce.dart';
 import 'package:ai_buddy/features/chat/data/models/chat_model.dart';
 import 'package:ai_buddy/features/chat/data/models/message_model.dart';
 import 'package:ai_buddy/features/friends/data/models/friend_model.dart';
+import 'package:ai_buddy/features/memory/data/models/friend_memory_model.dart';
 
 extension HiveRegistrar on HiveInterface {
   void registerAdapters() {
     registerAdapter(ChatModelAdapter());
+    registerAdapter(FriendMemoryModelAdapter());
     registerAdapter(FriendModelAdapter());
     registerAdapter(MessageModelAdapter());
   }
@@ -18,6 +20,7 @@ extension HiveRegistrar on HiveInterface {
 extension IsolatedHiveRegistrar on IsolatedHiveInterface {
   void registerAdapters() {
     registerAdapter(ChatModelAdapter());
+    registerAdapter(FriendMemoryModelAdapter());
     registerAdapter(FriendModelAdapter());
     registerAdapter(MessageModelAdapter());
   }
