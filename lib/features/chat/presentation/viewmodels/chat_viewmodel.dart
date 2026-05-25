@@ -90,7 +90,7 @@ class ChatViewModel extends Notifier<ChatState> {
     }
   }
 
-  Future<void> sendTextMessage({
+  Future<MessageEntity?> sendTextMessage({
     required String userId,
     required String friendId,
     required String text,
@@ -98,14 +98,14 @@ class ChatViewModel extends Notifier<ChatState> {
     final trimmedText = text.trim();
 
     if (trimmedText.isEmpty) {
-      return;
+      return null;
     }
 
     final chat = state.chat;
 
     if (chat == null) {
       state = state.copyWith(errorMessage: 'Chat is not ready yet.');
-      return;
+      return null;
     }
 
     state = state.copyWith(isSending: true, clearError: true);
@@ -114,7 +114,7 @@ class ChatViewModel extends Notifier<ChatState> {
       final sendTextMessageUseCase = ref.read(sendTextMessageUseCaseProvider);
       final getMessagesUseCase = ref.read(getMessagesUseCaseProvider);
 
-      await sendTextMessageUseCase.execute(
+      final buddyMessage = await sendTextMessageUseCase.execute(
         userId: userId,
         friendId: friendId,
         chatId: chat.id,
@@ -124,8 +124,20 @@ class ChatViewModel extends Notifier<ChatState> {
       final messages = await getMessagesUseCase.execute(chatId: chat.id);
 
       state = state.copyWith(isSending: false, messages: messages);
+
+      return buddyMessage;
     } catch (error) {
-      state = state.copyWith(isSending: false, errorMessage: error.toString());
+      final getMessagesUseCase = ref.read(getMessagesUseCaseProvider);
+
+      final messages = await getMessagesUseCase.execute(chatId: chat.id);
+
+      state = state.copyWith(
+        isSending: false,
+        messages: messages,
+        errorMessage: error.toString(),
+      );
+
+      return null;
     }
   }
 }
