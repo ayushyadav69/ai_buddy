@@ -12,6 +12,8 @@ import 'package:ai_buddy/features/chat/domain/usecases/save_message_usecase.dart
 import 'package:ai_buddy/features/chat/domain/usecases/send_text_message_usecase.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_ce_flutter/hive_flutter.dart';
+import 'package:ai_buddy/features/ai/presentation/providers/ai_dependency_providers.dart';
+import 'package:ai_buddy/features/friends/presentation/providers/friend_dependency_providers.dart';
 
 final chatBoxProvider = Provider<Box<ChatModel>>((ref) {
   return Hive.box<ChatModel>(HiveBoxNames.chats);
@@ -54,7 +56,9 @@ final saveMessageUseCaseProvider = Provider<SaveMessageUseCase>((ref) {
 
 final sendTextMessageUseCaseProvider = Provider<SendTextMessageUseCase>((ref) {
   return SendTextMessageUseCase(
-    repository: ref.watch(chatRepositoryProvider),
+    chatRepository: ref.watch(chatRepositoryProvider),
+    friendRepository: ref.watch(friendRepositoryProvider),
+    aiRepository: ref.watch(aiRepositoryProvider),
     uuid: ref.watch(uuidProvider),
   );
 });
