@@ -10,6 +10,8 @@ import 'dart:io';
 import 'package:ai_buddy/app/app.dart';
 import 'package:ai_buddy/core/database/hive_box_names.dart';
 import 'package:ai_buddy/features/friends/data/models/friend_model.dart';
+import 'package:ai_buddy/features/chat/data/models/chat_model.dart';
+import 'package:ai_buddy/features/chat/data/models/message_model.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_ce_flutter/hive_flutter.dart';
@@ -26,7 +28,17 @@ void main() {
       Hive.registerAdapter(FriendModelAdapter());
     }
 
+    if (!Hive.isAdapterRegistered(2)) {
+      Hive.registerAdapter(ChatModelAdapter());
+    }
+
+    if (!Hive.isAdapterRegistered(3)) {
+      Hive.registerAdapter(MessageModelAdapter());
+    }
+
     await Hive.openBox<FriendModel>(HiveBoxNames.friends);
+    await Hive.openBox<ChatModel>(HiveBoxNames.chats);
+    await Hive.openBox<MessageModel>(HiveBoxNames.messages);
   });
 
   tearDown(() async {
