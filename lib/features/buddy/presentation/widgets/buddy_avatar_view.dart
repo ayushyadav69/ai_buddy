@@ -99,19 +99,19 @@ base class _BuddyRivePainter extends rive.BasicArtboardPainter {
 
     super.artboardChanged(artboard);
 
-    debugPrint('Rive artboard loaded: ${artboard.name}');
-    debugPrint('Rive state machine count: ${artboard.stateMachineCount()}');
-    debugPrint('Rive animation count: ${artboard.animationCount()}');
+    // debugPrint('Rive artboard loaded: ${artboard.name}');
+    // debugPrint('Rive state machine count: ${artboard.stateMachineCount()}');
+    // debugPrint('Rive animation count: ${artboard.animationCount()}');
 
-    for (var index = 0; index < artboard.stateMachineCount(); index++) {
-      final stateMachine = artboard.stateMachineAt(index);
-      debugPrint('Rive state machine[$index]: ${stateMachine?.name}');
-    }
+    // for (var index = 0; index < artboard.stateMachineCount(); index++) {
+    //   final stateMachine = artboard.stateMachineAt(index);
+    //   debugPrint('Rive state machine[$index]: ${stateMachine?.name}');
+    // }
 
-    for (var index = 0; index < artboard.animationCount(); index++) {
-      final animation = artboard.animationAt(index);
-      debugPrint('Rive animation[$index]: ${animation.name}');
-    }
+    // for (var index = 0; index < artboard.animationCount(); index++) {
+    //   final animation = artboard.animationAt(index);
+    //   debugPrint('Rive animation[$index]: ${animation.name}');
+    // }
 
     _stateMachine =
         artboard.defaultStateMachine() ??
