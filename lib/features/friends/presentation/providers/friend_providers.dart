@@ -1,5 +1,6 @@
 import 'package:ai_buddy/features/friends/presentation/viewmodels/friend_form_viewmodel.dart';
 import 'package:ai_buddy/features/friends/presentation/viewmodels/friend_list_viewmodel.dart';
+import 'package:ai_buddy/features/friends/presentation/viewmodels/friend_profile_viewmodel.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 final friendListViewModelProvider =
@@ -10,4 +11,9 @@ final friendListViewModelProvider =
 final friendFormViewModelProvider =
     NotifierProvider<FriendFormViewModel, FriendFormState>(
       FriendFormViewModel.new,
+    );
+
+final friendProfileViewModelProvider =
+    NotifierProvider<FriendProfileViewModel, FriendProfileState>(
+      FriendProfileViewModel.new,
     );
