@@ -3,6 +3,8 @@ import 'package:ai_buddy/features/chat/domain/entities/message_entity.dart';
 import 'package:ai_buddy/features/chat/presentation/providers/chat_providers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:ai_buddy/features/buddy/presentation/controllers/buddy_providers.dart';
+import 'package:ai_buddy/features/buddy/presentation/widgets/buddy_stage.dart';
 
 class ChatScreen extends ConsumerStatefulWidget {
   final String friendId;
@@ -43,9 +45,17 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   }
 
   Future<void> _sendMessage() async {
-    final text = _messageController.text;
+    final text = _messageController.text.trim();
+
+    if (text.isEmpty) {
+      return;
+    }
 
     _messageController.clear();
+
+    final buddyController = ref.read(buddyStateControllerProvider.notifier);
+
+    buddyController.setThinking();
 
     await ref
         .read(chatViewModelProvider.notifier)
@@ -54,16 +64,40 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           friendId: widget.friendId,
           text: text,
         );
+
+    final chatState = ref.read(chatViewModelProvider);
+    final buddyMessages = chatState.messages.where(
+      (message) => message.sender == MessageSender.buddy,
+    );
+
+    if (buddyMessages.isNotEmpty) {
+      final latestBuddyMessage = buddyMessages.last;
+
+      buddyController.setTalking(
+        reply: latestBuddyMessage.text,
+        emotion: latestBuddyMessage.emotion ?? 'neutral',
+      );
+
+      await Future<void>.delayed(const Duration(seconds: 2));
+    }
+
+    if (!mounted) {
+      return;
+    }
+
+    buddyController.setIdle();
   }
 
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(chatViewModelProvider);
+    final buddyState = ref.watch(buddyStateControllerProvider);
 
     return Scaffold(
       appBar: AppBar(title: Text(widget.friendName)),
       body: Column(
         children: [
+          BuddyStage(friendName: widget.friendName, state: buddyState),
           Expanded(
             child: Builder(
               builder: (context) {
