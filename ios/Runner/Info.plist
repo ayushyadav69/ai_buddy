@@ -6,6 +6,14 @@
 	<true/>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>AI Buddy needs speech recognition so your child can talk to the buddy.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>AI Buddy needs microphone access so your child can ask questions by voice.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>AI Buddy needs camera access so your child can show a photo to the buddy.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>AI Buddy needs photo library access so your child can choose a photo to ask about.</string>
 	<key>CFBundleDisplayName</key>
 	<string>Ai Buddy</string>
 	<key>CFBundleExecutable</key>
