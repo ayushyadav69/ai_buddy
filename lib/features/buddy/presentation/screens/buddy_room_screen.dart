@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:ai_buddy/features/buddy/domain/entities/buddy_definition.dart';
 import 'package:ai_buddy/features/buddy/presentation/controllers/buddy_activity_state.dart';
 import 'package:ai_buddy/features/buddy/presentation/controllers/buddy_room_controller.dart';
@@ -28,9 +30,7 @@ class BuddyRoomScreen extends ConsumerWidget {
         ),
         actions: [
           IconButton(
-            onPressed: () {
-              controller.stopSpeaking();
-            },
+            onPressed: controller.stopSpeaking,
             icon: const Icon(Icons.stop_circle_rounded),
             tooltip: 'Stop speaking',
           ),
@@ -86,11 +86,19 @@ class BuddyRoomScreen extends ConsumerWidget {
                 ),
               ),
               const SizedBox(height: 14),
+              if (roomState.capturedPhotoPath != null) ...[
+                _CapturedPhotoPreview(
+                  photoPath: roomState.capturedPhotoPath!,
+                  onRemoveTap: controller.clearCapturedPhoto,
+                ),
+                const SizedBox(height: 14),
+              ],
               _BuddySpeechPanel(roomState: roomState),
               const SizedBox(height: 16),
               _BuddyActionBar(
                 isListening: roomState.isListening,
                 isProcessing: roomState.isProcessing,
+                isCapturingPhoto: roomState.isCapturingPhoto,
                 onMicTap: () {
                   if (roomState.isListening) {
                     controller.stopListening();
@@ -98,13 +106,7 @@ class BuddyRoomScreen extends ConsumerWidget {
                     controller.startVoiceQuestion();
                   }
                 },
-                onPhotoTap: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Photo support will come next.'),
-                    ),
-                  );
-                },
+                onPhotoTap: controller.capturePhoto,
               ),
             ],
           ),
@@ -118,9 +120,15 @@ class BuddyRoomScreen extends ConsumerWidget {
       return 'Oops! Try again.';
     }
 
+    if (state.isCapturingPhoto) {
+      return 'Opening camera...';
+    }
+
     switch (state.activity) {
       case BuddyActivityState.idle:
-        return 'Tap Talk and ask me.';
+        return state.capturedPhotoPath == null
+            ? 'Tap Talk and ask me.'
+            : 'Now ask me about the photo.';
       case BuddyActivityState.listening:
         return 'I am listening...';
       case BuddyActivityState.thinking:
@@ -130,6 +138,64 @@ class BuddyRoomScreen extends ConsumerWidget {
       case BuddyActivityState.offline:
         return 'I am taking a short break.';
     }
+  }
+}
+
+class _CapturedPhotoPreview extends StatelessWidget {
+  final String photoPath;
+  final VoidCallback onRemoveTap;
+
+  const _CapturedPhotoPreview({
+    required this.photoPath,
+    required this.onRemoveTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 120,
+      width: double.infinity,
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.06),
+            blurRadius: 12,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(18),
+            child: Image.file(
+              File(photoPath),
+              height: 100,
+              width: 100,
+              fit: BoxFit.cover,
+            ),
+          ),
+          const SizedBox(width: 12),
+          const Expanded(
+            child: Text(
+              'Photo added. Tap Talk and ask your buddy about it.',
+              style: TextStyle(
+                fontSize: 15,
+                height: 1.3,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          IconButton(
+            onPressed: onRemoveTap,
+            icon: const Icon(Icons.close_rounded),
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -235,18 +301,22 @@ class _BuddySpeechPanel extends StatelessWidget {
 class _BuddyActionBar extends StatelessWidget {
   final bool isListening;
   final bool isProcessing;
+  final bool isCapturingPhoto;
   final VoidCallback onMicTap;
   final VoidCallback onPhotoTap;
 
   const _BuddyActionBar({
     required this.isListening,
     required this.isProcessing,
+    required this.isCapturingPhoto,
     required this.onMicTap,
     required this.onPhotoTap,
   });
 
   @override
   Widget build(BuildContext context) {
+    final isBusy = isProcessing || isCapturingPhoto;
+
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -266,13 +336,13 @@ class _BuddyActionBar extends StatelessWidget {
           _BuddyActionButton(
             icon: isListening ? Icons.stop_rounded : Icons.mic_rounded,
             label: isListening ? 'Stop' : 'Talk',
-            onTap: isProcessing ? null : onMicTap,
+            onTap: isBusy ? null : onMicTap,
             isPrimary: true,
           ),
           _BuddyActionButton(
             icon: Icons.photo_camera_rounded,
-            label: 'Photo',
-            onTap: onPhotoTap,
+            label: isCapturingPhoto ? 'Opening' : 'Photo',
+            onTap: isBusy || isListening ? null : onPhotoTap,
           ),
         ],
       ),

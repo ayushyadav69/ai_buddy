@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:ai_buddy/features/ai/presentation/providers/ai_dependency_providers.dart';
 import 'package:ai_buddy/features/buddy/domain/entities/buddy_definition.dart';
 import 'package:ai_buddy/features/buddy/presentation/controllers/buddy_activity_state.dart';
+import 'package:ai_buddy/features/media/data/services/photo_picker_service.dart';
+import 'package:ai_buddy/features/media/presentation/providers/media_dependency_providers.dart';
 import 'package:ai_buddy/features/voice/data/services/voice_input_service.dart';
 import 'package:ai_buddy/features/voice/data/services/voice_output_service.dart';
 import 'package:ai_buddy/features/voice/presentation/providers/voice_dependency_providers.dart';
@@ -20,16 +22,20 @@ class BuddyRoomState {
   final String recognizedText;
   final String answerText;
   final String? errorMessage;
+  final String? capturedPhotoPath;
   final bool isListening;
   final bool isProcessing;
+  final bool isCapturingPhoto;
 
   const BuddyRoomState({
     this.activity = BuddyActivityState.idle,
     this.recognizedText = '',
     this.answerText = '',
     this.errorMessage,
+    this.capturedPhotoPath,
     this.isListening = false,
     this.isProcessing = false,
+    this.isCapturingPhoto = false,
   });
 
   BuddyRoomState copyWith({
@@ -37,17 +43,24 @@ class BuddyRoomState {
     String? recognizedText,
     String? answerText,
     String? errorMessage,
+    String? capturedPhotoPath,
     bool? isListening,
     bool? isProcessing,
+    bool? isCapturingPhoto,
     bool clearError = false,
+    bool clearCapturedPhoto = false,
   }) {
     return BuddyRoomState(
       activity: activity ?? this.activity,
       recognizedText: recognizedText ?? this.recognizedText,
       answerText: answerText ?? this.answerText,
       errorMessage: clearError ? null : errorMessage ?? this.errorMessage,
+      capturedPhotoPath: clearCapturedPhoto
+          ? null
+          : capturedPhotoPath ?? this.capturedPhotoPath,
       isListening: isListening ?? this.isListening,
       isProcessing: isProcessing ?? this.isProcessing,
+      isCapturingPhoto: isCapturingPhoto ?? this.isCapturingPhoto,
     );
   }
 }
@@ -59,11 +72,13 @@ class BuddyRoomController extends Notifier<BuddyRoomState> {
 
   late final VoiceInputService _voiceInputService;
   late final VoiceOutputService _voiceOutputService;
+  late final PhotoPickerService _photoPickerService;
 
   @override
   BuddyRoomState build() {
     _voiceInputService = ref.read(voiceInputServiceProvider);
     _voiceOutputService = ref.read(voiceOutputServiceProvider);
+    _photoPickerService = ref.read(photoPickerServiceProvider);
 
     ref.onDispose(() {
       unawaited(_voiceInputService.cancelListening());
@@ -74,7 +89,7 @@ class BuddyRoomController extends Notifier<BuddyRoomState> {
   }
 
   Future<void> startVoiceQuestion() async {
-    if (state.isProcessing || state.isListening) {
+    if (state.isProcessing || state.isListening || state.isCapturingPhoto) {
       return;
     }
 
@@ -106,6 +121,48 @@ class BuddyRoomController extends Notifier<BuddyRoomState> {
         );
       },
     );
+  }
+
+  Future<void> capturePhoto() async {
+    if (state.isProcessing || state.isListening || state.isCapturingPhoto) {
+      return;
+    }
+
+    await _voiceOutputService.stop();
+
+    state = state.copyWith(
+      activity: BuddyActivityState.thinking,
+      isCapturingPhoto: true,
+      clearError: true,
+    );
+
+    try {
+      final photo = await _photoPickerService.takePhotoWithCamera();
+
+      if (photo == null) {
+        state = state.copyWith(
+          activity: BuddyActivityState.idle,
+          isCapturingPhoto: false,
+        );
+        return;
+      }
+
+      state = state.copyWith(
+        activity: BuddyActivityState.idle,
+        capturedPhotoPath: photo.path,
+        isCapturingPhoto: false,
+      );
+    } catch (error) {
+      state = state.copyWith(
+        activity: BuddyActivityState.idle,
+        errorMessage: error.toString(),
+        isCapturingPhoto: false,
+      );
+    }
+  }
+
+  void clearCapturedPhoto() {
+    state = state.copyWith(clearCapturedPhoto: true);
   }
 
   Future<void> stopListening() async {
