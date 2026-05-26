@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:ai_buddy/features/ai/data/datasources/ai_remote_datasource.dart';
 import 'package:ai_buddy/features/ai/data/datasources/gemini_config.dart';
@@ -18,6 +19,7 @@ class GeminiAiDataSource implements AiRemoteDataSource {
     required String systemPrompt,
     required List<MessageEntity> recentMessages,
     required String currentMessage,
+    String? imagePath,
   }) async {
     if (!GeminiConfig.hasApiKey) {
       throw Exception(
@@ -32,10 +34,11 @@ class GeminiAiDataSource implements AiRemoteDataSource {
         'x-goog-api-key': GeminiConfig.apiKey,
       },
       body: jsonEncode(
-        _buildRequestBody(
+        await _buildRequestBody(
           systemPrompt: systemPrompt,
           recentMessages: recentMessages,
           currentMessage: currentMessage,
+          imagePath: imagePath,
         ),
       ),
     );
@@ -81,11 +84,12 @@ class GeminiAiDataSource implements AiRemoteDataSource {
     return _parseAiReply(aiJson);
   }
 
-  Map<String, dynamic> _buildRequestBody({
+  Future<Map<String, dynamic>> _buildRequestBody({
     required String systemPrompt,
     required List<MessageEntity> recentMessages,
     required String currentMessage,
-  }) {
+    required String? imagePath,
+  }) async {
     final contents = <Map<String, dynamic>>[];
 
     for (final message in recentMessages.take(12)) {
@@ -97,12 +101,17 @@ class GeminiAiDataSource implements AiRemoteDataSource {
       });
     }
 
-    contents.add({
-      'role': 'user',
-      'parts': [
-        {'text': currentMessage},
-      ],
-    });
+    final currentParts = <Map<String, dynamic>>[
+      {'text': currentMessage},
+    ];
+
+    final trimmedImagePath = imagePath?.trim();
+
+    if (trimmedImagePath != null && trimmedImagePath.isNotEmpty) {
+      currentParts.add(await _buildImagePart(trimmedImagePath));
+    }
+
+    contents.add({'role': 'user', 'parts': currentParts});
 
     return {
       'systemInstruction': {
@@ -156,6 +165,38 @@ class GeminiAiDataSource implements AiRemoteDataSource {
         },
       },
     };
+  }
+
+  Future<Map<String, dynamic>> _buildImagePart(String imagePath) async {
+    final imageFile = File(imagePath);
+
+    if (!imageFile.existsSync()) {
+      throw Exception('Selected photo does not exist.');
+    }
+
+    final imageBytes = await imageFile.readAsBytes();
+    final base64Image = base64Encode(imageBytes);
+
+    return {
+      'inlineData': {
+        'mimeType': _mimeTypeForPath(imagePath),
+        'data': base64Image,
+      },
+    };
+  }
+
+  String _mimeTypeForPath(String path) {
+    final lowerPath = path.toLowerCase();
+
+    if (lowerPath.endsWith('.png')) {
+      return 'image/png';
+    }
+
+    if (lowerPath.endsWith('.webp')) {
+      return 'image/webp';
+    }
+
+    return 'image/jpeg';
   }
 
   AiReplyEntity _parseAiReply(Map<String, dynamic> json) {
