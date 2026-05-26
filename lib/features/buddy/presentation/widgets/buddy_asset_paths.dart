@@ -1,5 +1,5 @@
 class BuddyAssetPaths {
-  const BuddyAssetPaths._();
+  static const String voiceBuddy = 'assets/rive/voice_buddy.riv';
 
-  static const String alienBasic = 'assets/rive/alien_basic.riv';
+  const BuddyAssetPaths._();
 }

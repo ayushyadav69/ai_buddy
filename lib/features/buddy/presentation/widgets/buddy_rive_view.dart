@@ -1,19 +1,25 @@
-import 'package:ai_buddy/features/buddy/presentation/controllers/buddy_activity_state.dart';
-import 'package:ai_buddy/features/buddy/presentation/controllers/buddy_state_controller.dart';
-import 'package:ai_buddy/features/buddy/presentation/widgets/buddy_asset_paths.dart';
 import 'package:flutter/material.dart';
 import 'package:rive/rive.dart' as rive;
 
-class BuddyAvatarView extends StatefulWidget {
-  final BuddyUiState state;
+class BuddyRiveView extends StatefulWidget {
+  final String assetPath;
+  final double? height;
+  final double? width;
+  final rive.Fit fit;
 
-  const BuddyAvatarView({required this.state, super.key});
+  const BuddyRiveView({
+    required this.assetPath,
+    this.height,
+    this.width,
+    this.fit = rive.Fit.contain,
+    super.key,
+  });
 
   @override
-  State<BuddyAvatarView> createState() => _BuddyAvatarViewState();
+  State<BuddyRiveView> createState() => _BuddyRiveViewState();
 }
 
-class _BuddyAvatarViewState extends State<BuddyAvatarView> {
+class _BuddyRiveViewState extends State<BuddyRiveView> {
   late final Future<rive.File> _riveFile;
   late final _BuddyRivePainter _painter;
   rive.File? _loadedFile;
@@ -22,18 +28,18 @@ class _BuddyAvatarViewState extends State<BuddyAvatarView> {
   @override
   void initState() {
     super.initState();
-    _painter = _BuddyRivePainter();
+    _painter = _BuddyRivePainter(riveFit: widget.fit);
     _riveFile = _loadRiveFile();
   }
 
   Future<rive.File> _loadRiveFile() async {
     final file = await rive.File.asset(
-      BuddyAssetPaths.voiceBuddy,
+      widget.assetPath,
       riveFactory: rive.Factory.rive,
     );
 
     if (file == null) {
-      throw FlutterError('Unable to decode ${BuddyAssetPaths.voiceBuddy}');
+      throw FlutterError('Unable to decode ${widget.assetPath}');
     }
 
     if (_isDisposed) {
@@ -56,19 +62,22 @@ class _BuddyAvatarViewState extends State<BuddyAvatarView> {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 130,
-      width: 130,
+      height: widget.height,
+      width: widget.width,
       child: FutureBuilder<rive.File>(
         future: _riveFile,
         builder: (context, snapshot) {
           final file = snapshot.data;
+
           if (file != null) {
             return rive.RiveFileWidget(file: file, painter: _painter);
           }
 
           if (snapshot.hasError) {
-            debugPrint('Failed to load buddy Rive asset: ${snapshot.error}');
-            return _BuddyAvatarFallback(state: widget.state);
+            debugPrint('Failed to load Rive asset: ${snapshot.error}');
+            return const Center(
+              child: Icon(Icons.smart_toy_outlined, size: 48),
+            );
           }
 
           return const Center(
@@ -88,7 +97,7 @@ base class _BuddyRivePainter extends rive.BasicArtboardPainter {
   rive.StateMachine? _stateMachine;
   rive.Animation? _animation;
 
-  _BuddyRivePainter() : super(fit: rive.Fit.contain);
+  _BuddyRivePainter({required rive.Fit riveFit}) : super(fit: riveFit);
 
   @override
   void artboardChanged(rive.Artboard artboard) {
@@ -98,20 +107,6 @@ base class _BuddyRivePainter extends rive.BasicArtboardPainter {
     _animation = null;
 
     super.artboardChanged(artboard);
-
-    // debugPrint('Rive artboard loaded: ${artboard.name}');
-    // debugPrint('Rive state machine count: ${artboard.stateMachineCount()}');
-    // debugPrint('Rive animation count: ${artboard.animationCount()}');
-
-    // for (var index = 0; index < artboard.stateMachineCount(); index++) {
-    //   final stateMachine = artboard.stateMachineAt(index);
-    //   debugPrint('Rive state machine[$index]: ${stateMachine?.name}');
-    // }
-
-    // for (var index = 0; index < artboard.animationCount(); index++) {
-    //   final animation = artboard.animationAt(index);
-    //   debugPrint('Rive animation[$index]: ${animation.name}');
-    // }
 
     _stateMachine =
         artboard.defaultStateMachine() ??
@@ -127,11 +122,13 @@ base class _BuddyRivePainter extends rive.BasicArtboardPainter {
   @override
   bool advance(double elapsedSeconds) {
     final stateMachine = _stateMachine;
+
     if (stateMachine != null) {
       return stateMachine.advanceAndApply(elapsedSeconds);
     }
 
     final animation = _animation;
+
     if (animation != null) {
       return animation.advanceAndApply(elapsedSeconds);
     }
@@ -146,24 +143,5 @@ base class _BuddyRivePainter extends rive.BasicArtboardPainter {
     _stateMachine = null;
     _animation = null;
     super.dispose();
-  }
-}
-
-class _BuddyAvatarFallback extends StatelessWidget {
-  final BuddyUiState state;
-
-  const _BuddyAvatarFallback({required this.state});
-
-  @override
-  Widget build(BuildContext context) {
-    final icon = switch (state.activity) {
-      BuddyActivityState.idle => Icons.smart_toy_outlined,
-      BuddyActivityState.listening => Icons.hearing,
-      BuddyActivityState.thinking => Icons.psychology_alt_outlined,
-      BuddyActivityState.talking => Icons.record_voice_over_outlined,
-      BuddyActivityState.offline => Icons.wifi_off,
-    };
-
-    return CircleAvatar(radius: 44, child: Icon(icon, size: 44));
   }
 }
