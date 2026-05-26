@@ -6,5 +6,6 @@ abstract class AiRepository {
     required String systemPrompt,
     required List<MessageEntity> recentMessages,
     required String currentMessage,
+    String? imagePath,
   });
 }

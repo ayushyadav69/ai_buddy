@@ -205,10 +205,22 @@ class BuddyRoomController extends Notifier<BuddyRoomState> {
     try {
       final aiRepository = ref.read(aiRepositoryProvider);
 
+      final capturedPhotoPath = state.capturedPhotoPath;
+
       final reply = await aiRepository.generateReply(
         systemPrompt: buddy.systemPrompt,
         recentMessages: const [],
-        currentMessage: trimmedQuestion,
+        currentMessage: capturedPhotoPath == null
+            ? trimmedQuestion
+            : '''
+      The child has attached a photo and asked this question:
+
+      $trimmedQuestion
+
+      Answer using the photo if it is relevant.
+      Keep the answer simple, safe, and easy for a child to understand.
+      ''',
+        imagePath: capturedPhotoPath,
       );
 
       final answer = reply.reply.trim();

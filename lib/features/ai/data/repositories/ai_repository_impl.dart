@@ -13,11 +13,13 @@ class AiRepositoryImpl implements AiRepository {
     required String systemPrompt,
     required List<MessageEntity> recentMessages,
     required String currentMessage,
+    String? imagePath,
   }) {
     return remoteDataSource.generateReply(
       systemPrompt: systemPrompt,
       recentMessages: recentMessages,
       currentMessage: currentMessage,
+      imagePath: imagePath,
     );
   }
 }
