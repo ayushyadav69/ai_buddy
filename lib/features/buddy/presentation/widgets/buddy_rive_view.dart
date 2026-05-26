@@ -1,14 +1,17 @@
+import 'package:ai_buddy/features/buddy/presentation/controllers/buddy_activity_state.dart';
 import 'package:flutter/material.dart';
 import 'package:rive/rive.dart' as rive;
 
 class BuddyRiveView extends StatefulWidget {
   final String assetPath;
+  final BuddyActivityState activity;
   final double? height;
   final double? width;
   final rive.Fit fit;
 
   const BuddyRiveView({
     required this.assetPath,
+    this.activity = BuddyActivityState.idle,
     this.height,
     this.width,
     this.fit = rive.Fit.contain,
@@ -22,14 +25,29 @@ class BuddyRiveView extends StatefulWidget {
 class _BuddyRiveViewState extends State<BuddyRiveView> {
   late final Future<rive.File> _riveFile;
   late final _BuddyRivePainter _painter;
+
   rive.File? _loadedFile;
   var _isDisposed = false;
 
   @override
   void initState() {
     super.initState();
-    _painter = _BuddyRivePainter(riveFit: widget.fit);
+
+    _painter = _BuddyRivePainter(
+      riveFit: widget.fit,
+      activity: widget.activity,
+    );
+
     _riveFile = _loadRiveFile();
+  }
+
+  @override
+  void didUpdateWidget(covariant BuddyRiveView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    if (oldWidget.activity != widget.activity) {
+      _painter.setActivity(widget.activity);
+    }
   }
 
   Future<rive.File> _loadRiveFile() async {
@@ -94,17 +112,43 @@ class _BuddyRiveViewState extends State<BuddyRiveView> {
 }
 
 base class _BuddyRivePainter extends rive.BasicArtboardPainter {
+  static const _talkInputName = 'Talk';
+  static const _hearInputName = 'Hear';
+  static const _checkInputName = 'Check';
+  static const _lookInputName = 'Look';
+
   rive.StateMachine? _stateMachine;
   rive.Animation? _animation;
 
-  _BuddyRivePainter({required rive.Fit riveFit}) : super(fit: riveFit);
+  rive.BooleanInput? _talkInput;
+  rive.BooleanInput? _hearInput;
+  rive.BooleanInput? _checkInput;
+  rive.BooleanInput? _lookInput;
+
+  BuddyActivityState _activity;
+
+  _BuddyRivePainter({
+    required rive.Fit riveFit,
+    required BuddyActivityState activity,
+  }) : _activity = activity,
+       super(fit: riveFit);
+
+  void setActivity(BuddyActivityState activity) {
+    _activity = activity;
+    _applyActivityToRive();
+  }
 
   @override
   void artboardChanged(rive.Artboard artboard) {
     _stateMachine?.dispose();
     _animation?.dispose();
+
     _stateMachine = null;
     _animation = null;
+    _talkInput = null;
+    _hearInput = null;
+    _checkInput = null;
+    _lookInput = null;
 
     super.artboardChanged(artboard);
 
@@ -112,11 +156,73 @@ base class _BuddyRivePainter extends rive.BasicArtboardPainter {
         artboard.defaultStateMachine() ??
         (artboard.stateMachineCount() > 0 ? artboard.stateMachineAt(0) : null);
 
-    if (_stateMachine == null && artboard.animationCount() > 0) {
+    final stateMachine = _stateMachine;
+
+    if (stateMachine != null) {
+      _talkInput = _booleanInput(stateMachine, _talkInputName);
+      _hearInput = _booleanInput(stateMachine, _hearInputName);
+      _checkInput = _booleanInput(stateMachine, _checkInputName);
+      _lookInput = _booleanInput(stateMachine, _lookInputName);
+
+      _applyActivityToRive();
+    } else if (artboard.animationCount() > 0) {
       _animation = artboard.animationAt(0);
     }
 
     notifyListeners();
+  }
+
+  void _applyActivityToRive() {
+    final stateMachine = _stateMachine;
+
+    if (stateMachine == null) {
+      return;
+    }
+
+    _setInput(_talkInput, false);
+    _setInput(_hearInput, false);
+    _setInput(_checkInput, false);
+    _setInput(_lookInput, false);
+
+    switch (_activity) {
+      case BuddyActivityState.idle:
+        _setInput(_lookInput, true);
+
+      case BuddyActivityState.listening:
+        _setInput(_hearInput, true);
+
+      case BuddyActivityState.thinking:
+        _setInput(_checkInput, true);
+
+      case BuddyActivityState.talking:
+        _setInput(_talkInput, true);
+
+      case BuddyActivityState.offline:
+        _setInput(_lookInput, true);
+    }
+
+    stateMachine.requestAdvance();
+    notifyListeners();
+  }
+
+  void _setInput(rive.BooleanInput? input, bool value) {
+    if (input == null) {
+      return;
+    }
+
+    input.value = value;
+  }
+
+  rive.BooleanInput? _booleanInput(
+    rive.StateMachine stateMachine,
+    String inputName,
+  ) {
+    // Rive now recommends Data Binding, but this marketplace .riv file
+    // exposes old-style state machine boolean inputs.
+    //
+    // Keeping this access in one place makes it easy to migrate later.
+    // ignore: deprecated_member_use
+    return stateMachine.boolean(inputName);
   }
 
   @override
@@ -140,8 +246,14 @@ base class _BuddyRivePainter extends rive.BasicArtboardPainter {
   void dispose() {
     _stateMachine?.dispose();
     _animation?.dispose();
+
     _stateMachine = null;
     _animation = null;
+    _talkInput = null;
+    _hearInput = null;
+    _checkInput = null;
+    _lookInput = null;
+
     super.dispose();
   }
 }
