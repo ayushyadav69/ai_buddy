@@ -16,6 +16,7 @@ class BuddyStage extends StatelessWidget {
       BuddyActivityState.listening => 'Listening',
       BuddyActivityState.thinking => 'Thinking',
       BuddyActivityState.talking => 'Talking',
+      BuddyActivityState.celebrating => 'Celebrating',
       BuddyActivityState.offline => 'Offline',
     };
 

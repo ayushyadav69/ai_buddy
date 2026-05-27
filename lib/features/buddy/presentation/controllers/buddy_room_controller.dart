@@ -246,7 +246,13 @@ class BuddyRoomController extends Notifier<BuddyRoomState> {
           state = state.copyWith(activity: BuddyActivityState.talking);
         },
         onComplete: () {
-          state = state.copyWith(activity: BuddyActivityState.idle);
+          state = state.copyWith(activity: BuddyActivityState.celebrating);
+
+          Future<void>.delayed(const Duration(seconds: 2), () {
+            if (state.activity == BuddyActivityState.celebrating) {
+              state = state.copyWith(activity: BuddyActivityState.idle);
+            }
+          });
         },
         onError: (message) {
           state = state.copyWith(

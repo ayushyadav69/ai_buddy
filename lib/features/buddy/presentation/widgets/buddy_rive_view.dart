@@ -224,6 +224,9 @@ base class _BuddyRivePainter extends rive.BasicArtboardPainter {
       case BuddyActivityState.talking:
         _setInput(_talkInput, true);
 
+      case BuddyActivityState.celebrating:
+        _setInput(_lookInput, true);
+
       case BuddyActivityState.offline:
         _setInput(_lookInput, true);
     }
@@ -251,6 +254,9 @@ base class _BuddyRivePainter extends rive.BasicArtboardPainter {
 
       case BuddyActivityState.talking:
         return 'Talking';
+
+      case BuddyActivityState.celebrating:
+        return 'Celebrate';
 
       case BuddyActivityState.offline:
         return 'Idle';
