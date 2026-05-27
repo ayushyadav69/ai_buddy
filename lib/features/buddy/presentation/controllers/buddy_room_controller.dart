@@ -213,13 +213,23 @@ class BuddyRoomController extends Notifier<BuddyRoomState> {
         currentMessage: capturedPhotoPath == null
             ? trimmedQuestion
             : '''
-      The child has attached a photo and asked this question:
+The child has attached a photo and asked this question:
 
-      $trimmedQuestion
+$trimmedQuestion
 
-      Answer using the photo if it is relevant.
-      Keep the answer simple, safe, and easy for a child to understand.
-      ''',
+First look at the photo and the question.
+Then decide if this photo question belongs to your buddy role.
+
+If it belongs to your role:
+- Answer using the photo.
+- Keep the answer simple, safe, and easy for a child to understand.
+
+If it does NOT belong to your role:
+- Do not answer the full photo question.
+- Gently suggest the correct buddy.
+- Mention the exact buddy name.
+- Keep the redirect short and friendly.
+''',
         imagePath: capturedPhotoPath,
       );
 
