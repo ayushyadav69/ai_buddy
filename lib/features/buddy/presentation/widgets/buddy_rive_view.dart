@@ -117,6 +117,7 @@ base class _BuddyRivePainter extends rive.BasicArtboardPainter {
   static const _checkInputName = 'Check';
   static const _lookInputName = 'Look';
 
+  rive.Artboard? _artboard;
   rive.StateMachine? _stateMachine;
   rive.Animation? _animation;
 
@@ -126,6 +127,7 @@ base class _BuddyRivePainter extends rive.BasicArtboardPainter {
   rive.BooleanInput? _lookInput;
 
   BuddyActivityState _activity;
+  String? _currentAnimationName;
 
   _BuddyRivePainter({
     required rive.Fit riveFit,
@@ -134,23 +136,35 @@ base class _BuddyRivePainter extends rive.BasicArtboardPainter {
        super(fit: riveFit);
 
   void setActivity(BuddyActivityState activity) {
+    if (_activity == activity) {
+      return;
+    }
+
     _activity = activity;
     _applyActivityToRive();
   }
 
   @override
   void artboardChanged(rive.Artboard artboard) {
-    _stateMachine?.dispose();
-    _animation?.dispose();
+    _disposeRuntimeObjects();
 
-    _stateMachine = null;
-    _animation = null;
-    _talkInput = null;
-    _hearInput = null;
-    _checkInput = null;
-    _lookInput = null;
+    _artboard = artboard;
 
     super.artboardChanged(artboard);
+
+    debugPrint('Rive artboard loaded: ${artboard.name}');
+    debugPrint('Rive state machine count: ${artboard.stateMachineCount()}');
+    debugPrint('Rive animation count: ${artboard.animationCount()}');
+
+    for (var index = 0; index < artboard.stateMachineCount(); index++) {
+      final stateMachine = artboard.stateMachineAt(index);
+      debugPrint('Rive state machine[$index]: ${stateMachine?.name}');
+    }
+
+    for (var index = 0; index < artboard.animationCount(); index++) {
+      final animation = artboard.animationAt(index);
+      debugPrint('Rive animation[$index]: ${animation.name}');
+    }
 
     _stateMachine =
         artboard.defaultStateMachine() ??
@@ -163,16 +177,29 @@ base class _BuddyRivePainter extends rive.BasicArtboardPainter {
       _hearInput = _booleanInput(stateMachine, _hearInputName);
       _checkInput = _booleanInput(stateMachine, _checkInputName);
       _lookInput = _booleanInput(stateMachine, _lookInputName);
-
-      _applyActivityToRive();
-    } else if (artboard.animationCount() > 0) {
-      _animation = artboard.animationAt(0);
     }
 
+    _applyActivityToRive();
     notifyListeners();
   }
 
   void _applyActivityToRive() {
+    if (_canUseBooleanInputs) {
+      _applyActivityUsingInputs();
+      return;
+    }
+
+    _applyActivityUsingAnimations();
+  }
+
+  bool get _canUseBooleanInputs {
+    return _talkInput != null ||
+        _hearInput != null ||
+        _checkInput != null ||
+        _lookInput != null;
+  }
+
+  void _applyActivityUsingInputs() {
     final stateMachine = _stateMachine;
 
     if (stateMachine == null) {
@@ -197,12 +224,83 @@ base class _BuddyRivePainter extends rive.BasicArtboardPainter {
       case BuddyActivityState.talking:
         _setInput(_talkInput, true);
 
+      case BuddyActivityState.celebrating:
+        _setInput(_lookInput, true);
+
       case BuddyActivityState.offline:
         _setInput(_lookInput, true);
     }
 
     stateMachine.requestAdvance();
     notifyListeners();
+  }
+
+  void _applyActivityUsingAnimations() {
+    final animationName = _animationNameForActivity(_activity);
+    _setAnimationByName(animationName);
+    notifyListeners();
+  }
+
+  String _animationNameForActivity(BuddyActivityState activity) {
+    switch (activity) {
+      case BuddyActivityState.idle:
+        return 'Idle';
+
+      case BuddyActivityState.listening:
+        return 'Greeting';
+
+      case BuddyActivityState.thinking:
+        return 'Thinking';
+
+      case BuddyActivityState.talking:
+        return 'Talking';
+
+      case BuddyActivityState.celebrating:
+        return 'Celebrate';
+
+      case BuddyActivityState.offline:
+        return 'Idle';
+    }
+  }
+
+  void _setAnimationByName(String animationName) {
+    final artboard = _artboard;
+
+    if (artboard == null) {
+      return;
+    }
+
+    if (_currentAnimationName == animationName && _animation != null) {
+      return;
+    }
+
+    _animation?.dispose();
+    _animation = null;
+    _currentAnimationName = null;
+
+    for (var index = 0; index < artboard.animationCount(); index++) {
+      final animation = artboard.animationAt(index);
+
+      if (animation.name == animationName) {
+        _animation = animation;
+        _currentAnimationName = animationName;
+        return;
+      }
+
+      animation.dispose();
+    }
+
+    for (var index = 0; index < artboard.animationCount(); index++) {
+      final animation = artboard.animationAt(index);
+
+      if (animation.name == 'Idle') {
+        _animation = animation;
+        _currentAnimationName = 'Idle';
+        return;
+      }
+
+      animation.dispose();
+    }
   }
 
   void _setInput(rive.BooleanInput? input, bool value) {
@@ -217,8 +315,8 @@ base class _BuddyRivePainter extends rive.BasicArtboardPainter {
     rive.StateMachine stateMachine,
     String inputName,
   ) {
-    // Rive now recommends Data Binding, but this marketplace .riv file
-    // exposes old-style state machine boolean inputs.
+    // Rive now recommends Data Binding, but some marketplace .riv files
+    // expose old-style state machine boolean inputs.
     //
     // Keeping this access in one place makes it easy to migrate later.
     // ignore: deprecated_member_use
@@ -227,10 +325,12 @@ base class _BuddyRivePainter extends rive.BasicArtboardPainter {
 
   @override
   bool advance(double elapsedSeconds) {
-    final stateMachine = _stateMachine;
+    if (_canUseBooleanInputs) {
+      final stateMachine = _stateMachine;
 
-    if (stateMachine != null) {
-      return stateMachine.advanceAndApply(elapsedSeconds);
+      if (stateMachine != null) {
+        return stateMachine.advanceAndApply(elapsedSeconds);
+      }
     }
 
     final animation = _animation;
@@ -244,16 +344,23 @@ base class _BuddyRivePainter extends rive.BasicArtboardPainter {
 
   @override
   void dispose() {
+    _disposeRuntimeObjects();
+    super.dispose();
+  }
+
+  void _disposeRuntimeObjects() {
     _stateMachine?.dispose();
     _animation?.dispose();
 
+    _artboard = null;
     _stateMachine = null;
     _animation = null;
+
     _talkInput = null;
     _hearInput = null;
     _checkInput = null;
     _lookInput = null;
 
-    super.dispose();
+    _currentAnimationName = null;
   }
 }

@@ -161,6 +161,7 @@ class _BuddyAvatarFallback extends StatelessWidget {
       BuddyActivityState.listening => Icons.hearing,
       BuddyActivityState.thinking => Icons.psychology_alt_outlined,
       BuddyActivityState.talking => Icons.record_voice_over_outlined,
+      BuddyActivityState.celebrating => Icons.celebration_rounded,
       BuddyActivityState.offline => Icons.wifi_off,
     };
 

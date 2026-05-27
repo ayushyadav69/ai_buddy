@@ -135,6 +135,8 @@ class BuddyRoomScreen extends ConsumerWidget {
         return 'Let me think...';
       case BuddyActivityState.talking:
         return 'I am talking now!';
+      case BuddyActivityState.celebrating:
+        return 'Yay! Great job!';
       case BuddyActivityState.offline:
         return 'I am taking a short break.';
     }

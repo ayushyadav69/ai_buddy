@@ -1,1 +1,8 @@
-enum BuddyActivityState { idle, listening, thinking, talking, offline }
+enum BuddyActivityState {
+  idle,
+  listening,
+  thinking,
+  talking,
+  celebrating,
+  offline,
+}
