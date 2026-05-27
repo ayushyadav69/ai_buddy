@@ -434,68 +434,40 @@ class _BuddySpeechPanel extends StatelessWidget {
     final hasError = roomState.errorMessage != null;
 
     if (!hasRecognizedText && !hasAnswerText && !hasError) {
-      return const SizedBox.shrink();
+      return _EmptySpeechHint(visualTheme: visualTheme);
     }
 
     return Container(
       width: double.infinity,
-      constraints: const BoxConstraints(maxHeight: 150),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(26),
-        border: Border.all(
-          color: visualTheme.primaryColor.withValues(alpha: 0.12),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 5),
-          ),
-        ],
-      ),
+      constraints: const BoxConstraints(maxHeight: 170),
       child: SingleChildScrollView(
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (hasRecognizedText) ...[
-              _PanelLabel(label: 'You said', color: visualTheme.primaryColor),
-              const SizedBox(height: 4),
-              Text(
-                roomState.recognizedText,
-                style: const TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
-                ),
+            if (hasRecognizedText)
+              _SpeechBubble(
+                label: 'You said',
+                text: roomState.recognizedText,
+                color: visualTheme.primaryColor,
+                backgroundColor: visualTheme.softColor,
+                alignRight: true,
               ),
-            ],
-            if (hasRecognizedText && hasAnswerText) const SizedBox(height: 12),
-            if (hasAnswerText) ...[
-              _PanelLabel(label: 'Buddy said', color: visualTheme.primaryColor),
-              const SizedBox(height: 4),
-              Text(
-                roomState.answerText,
-                style: const TextStyle(
-                  fontSize: 16,
-                  height: 1.3,
-                  fontWeight: FontWeight.w700,
-                ),
+            if (hasRecognizedText && hasAnswerText) const SizedBox(height: 10),
+            if (hasAnswerText)
+              _SpeechBubble(
+                label: 'Buddy said',
+                text: roomState.answerText,
+                color: visualTheme.primaryColor,
+                backgroundColor: Colors.white,
+                alignRight: false,
               ),
-            ],
-            if (hasError) ...[
-              const _PanelLabel(label: 'Problem', color: Colors.red),
-              const SizedBox(height: 4),
-              Text(
-                roomState.errorMessage!,
-                style: const TextStyle(
-                  fontSize: 15,
-                  height: 1.3,
-                  fontWeight: FontWeight.w700,
-                  color: Colors.red,
-                ),
+            if (hasError)
+              _SpeechBubble(
+                label: 'Problem',
+                text: roomState.errorMessage!,
+                color: Colors.red,
+                backgroundColor: const Color(0xFFFFECEC),
+                alignRight: false,
               ),
-            ],
           ],
         ),
       ),
@@ -503,17 +475,118 @@ class _BuddySpeechPanel extends StatelessWidget {
   }
 }
 
-class _PanelLabel extends StatelessWidget {
-  final String label;
-  final Color color;
+class _EmptySpeechHint extends StatelessWidget {
+  final BuddyVisualTheme visualTheme;
 
-  const _PanelLabel({required this.label, required this.color});
+  const _EmptySpeechHint({required this.visualTheme});
 
   @override
   Widget build(BuildContext context) {
-    return Text(
-      label,
-      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: color),
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.82),
+        borderRadius: BorderRadius.circular(26),
+        border: Border.all(
+          color: visualTheme.primaryColor.withValues(alpha: 0.10),
+        ),
+      ),
+      child: Row(
+        children: [
+          CircleAvatar(
+            radius: 20,
+            backgroundColor: visualTheme.softColor,
+            child: Icon(
+              Icons.tips_and_updates_rounded,
+              color: visualTheme.primaryColor,
+              size: 22,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              'Tap Talk and ask your buddy anything.',
+              style: TextStyle(
+                color: visualTheme.primaryColor,
+                fontSize: 14,
+                height: 1.25,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SpeechBubble extends StatelessWidget {
+  final String label;
+  final String text;
+  final Color color;
+  final Color backgroundColor;
+  final bool alignRight;
+
+  const _SpeechBubble({
+    required this.label,
+    required this.text,
+    required this.color,
+    required this.backgroundColor,
+    required this.alignRight,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Align(
+      alignment: alignRight ? Alignment.centerRight : Alignment.centerLeft,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.fromLTRB(15, 13, 15, 14),
+        decoration: BoxDecoration(
+          color: backgroundColor,
+          borderRadius: BorderRadius.only(
+            topLeft: const Radius.circular(24),
+            topRight: const Radius.circular(24),
+            bottomLeft: Radius.circular(alignRight ? 24 : 8),
+            bottomRight: Radius.circular(alignRight ? 8 : 24),
+          ),
+          border: Border.all(color: color.withValues(alpha: 0.10)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 10,
+              offset: const Offset(0, 5),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: alignRight
+              ? CrossAxisAlignment.end
+              : CrossAxisAlignment.start,
+          children: [
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w900,
+                color: color,
+              ),
+            ),
+            const SizedBox(height: 5),
+            Text(
+              text,
+              textAlign: alignRight ? TextAlign.right : TextAlign.left,
+              style: TextStyle(
+                color: Colors.grey.shade900,
+                fontSize: 15.5,
+                height: 1.3,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -540,10 +613,11 @@ class _BuddyActionBar extends StatelessWidget {
     final isBusy = isProcessing || isCapturingPhoto;
 
     return Container(
+      width: double.infinity,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(30),
+        borderRadius: BorderRadius.circular(32),
         border: Border.all(
           color: visualTheme.primaryColor.withValues(alpha: 0.10),
         ),
@@ -556,23 +630,21 @@ class _BuddyActionBar extends StatelessWidget {
         ],
       ),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
-          _BuddyActionButton(
-            icon: isListening ? Icons.stop_rounded : Icons.mic_rounded,
-            label: isListening ? 'Stop' : 'Talk',
-            onTap: isBusy ? null : onMicTap,
-            backgroundColor: visualTheme.primaryColor,
-            iconColor: Colors.white,
-            textColor: visualTheme.primaryColor,
+          Expanded(
+            child: _PrimaryTalkButton(
+              visualTheme: visualTheme,
+              isListening: isListening,
+              isDisabled: isBusy,
+              onTap: onMicTap,
+            ),
           ),
-          _BuddyActionButton(
-            icon: Icons.photo_camera_rounded,
-            label: isCapturingPhoto ? 'Opening' : 'Photo',
-            onTap: isBusy || isListening ? null : onPhotoTap,
-            backgroundColor: visualTheme.softColor,
-            iconColor: visualTheme.primaryColor,
-            textColor: visualTheme.primaryColor,
+          const SizedBox(width: 12),
+          _PhotoButton(
+            visualTheme: visualTheme,
+            isCapturingPhoto: isCapturingPhoto,
+            isDisabled: isBusy || isListening,
+            onTap: onPhotoTap,
           ),
         ],
       ),
@@ -580,45 +652,111 @@ class _BuddyActionBar extends StatelessWidget {
   }
 }
 
-class _BuddyActionButton extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final VoidCallback? onTap;
-  final Color backgroundColor;
-  final Color iconColor;
-  final Color textColor;
+class _PrimaryTalkButton extends StatelessWidget {
+  final BuddyVisualTheme visualTheme;
+  final bool isListening;
+  final bool isDisabled;
+  final VoidCallback onTap;
 
-  const _BuddyActionButton({
-    required this.icon,
-    required this.label,
+  const _PrimaryTalkButton({
+    required this.visualTheme,
+    required this.isListening,
+    required this.isDisabled,
     required this.onTap,
-    required this.backgroundColor,
-    required this.iconColor,
-    required this.textColor,
   });
 
   @override
   Widget build(BuildContext context) {
     return InkWell(
-      onTap: onTap,
+      onTap: isDisabled ? null : onTap,
       borderRadius: BorderRadius.circular(26),
       child: Opacity(
-        opacity: onTap == null ? 0.5 : 1,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
-          child: Column(
-            children: [
-              CircleAvatar(
-                radius: 30,
-                backgroundColor: backgroundColor,
-                child: Icon(icon, size: 31, color: iconColor),
+        opacity: isDisabled ? 0.55 : 1,
+        child: Container(
+          height: 72,
+          padding: const EdgeInsets.symmetric(horizontal: 18),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [visualTheme.primaryColor, visualTheme.secondaryColor],
+            ),
+            borderRadius: BorderRadius.circular(26),
+            boxShadow: [
+              BoxShadow(
+                color: visualTheme.primaryColor.withValues(alpha: 0.22),
+                blurRadius: 12,
+                offset: const Offset(0, 6),
               ),
-              const SizedBox(height: 7),
+            ],
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                isListening ? Icons.stop_rounded : Icons.mic_rounded,
+                color: Colors.white,
+                size: 34,
+              ),
+              const SizedBox(width: 12),
               Text(
-                label,
+                isListening ? 'Stop' : 'Talk',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 22,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PhotoButton extends StatelessWidget {
+  final BuddyVisualTheme visualTheme;
+  final bool isCapturingPhoto;
+  final bool isDisabled;
+  final VoidCallback onTap;
+
+  const _PhotoButton({
+    required this.visualTheme,
+    required this.isCapturingPhoto,
+    required this.isDisabled,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: isDisabled ? null : onTap,
+      borderRadius: BorderRadius.circular(24),
+      child: Opacity(
+        opacity: isDisabled ? 0.55 : 1,
+        child: Container(
+          height: 72,
+          width: 82,
+          decoration: BoxDecoration(
+            color: visualTheme.softColor,
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(
+              color: visualTheme.primaryColor.withValues(alpha: 0.12),
+            ),
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.photo_camera_rounded,
+                color: visualTheme.primaryColor,
+                size: 28,
+              ),
+              const SizedBox(height: 5),
+              Text(
+                isCapturingPhoto ? 'Opening' : 'Photo',
                 style: TextStyle(
-                  color: textColor,
-                  fontSize: 13,
+                  color: visualTheme.primaryColor,
+                  fontSize: 12,
                   fontWeight: FontWeight.w900,
                 ),
               ),
