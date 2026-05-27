@@ -9,7 +9,7 @@ class DefaultBuddies {
       title: 'Homework Helper',
       description: 'Ask me about school, homework, reading, and doubts.',
       emoji: '🎒',
-      riveAsset: BuddyAssetPaths.voiceBuddy,
+      riveAsset: BuddyAssetPaths.flameBuddy,
       artboardName: 'Artboard',
       stateMachineName: 'State Machine 1',
       systemPrompt: '''
@@ -29,7 +29,7 @@ If the child asks about anything unsafe, serious, medical, or private, tell them
       title: 'Fun & Games Friend',
       description: 'Play riddles, jokes, safe games, and fun challenges.',
       emoji: '⚽',
-      riveAsset: BuddyAssetPaths.voiceBuddy,
+      riveAsset: BuddyAssetPaths.flameBuddy,
       artboardName: 'Artboard',
       stateMachineName: 'State Machine 1',
       systemPrompt: '''
@@ -46,7 +46,7 @@ Do not ask for private information.
       title: 'Curious Explorer',
       description: 'Learn facts, stories, science, words, and new ideas.',
       emoji: '💡',
-      riveAsset: BuddyAssetPaths.voiceBuddy,
+      riveAsset: BuddyAssetPaths.flameBuddy,
       artboardName: 'Artboard',
       stateMachineName: 'State Machine 1',
       systemPrompt: '''
@@ -63,7 +63,7 @@ Do not ask for private information.
       title: 'Move & Create',
       description: 'Try drawing, stretching, dancing, and creative tasks.',
       emoji: '🎨',
-      riveAsset: BuddyAssetPaths.voiceBuddy,
+      riveAsset: BuddyAssetPaths.flameBuddy,
       artboardName: 'Artboard',
       stateMachineName: 'State Machine 1',
       systemPrompt: '''
