@@ -8,13 +8,30 @@ import 'package:ai_buddy/features/buddy/presentation/widgets/buddy_rive_view.dar
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-class BuddyRoomScreen extends ConsumerWidget {
+class BuddyRoomScreen extends ConsumerStatefulWidget {
   final BuddyDefinition buddy;
 
   const BuddyRoomScreen({required this.buddy, super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<BuddyRoomScreen> createState() => _BuddyRoomScreenState();
+}
+
+class _BuddyRoomScreenState extends ConsumerState<BuddyRoomScreen> {
+  @override
+  void initState() {
+    super.initState();
+
+    Future.microtask(() {
+      ref
+          .read(buddyRoomControllerProvider(widget.buddy).notifier)
+          .startRoomSession();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final buddy = widget.buddy;
     final provider = buddyRoomControllerProvider(buddy);
     final roomState = ref.watch(provider);
     final controller = ref.read(provider.notifier);
@@ -96,14 +113,23 @@ class BuddyRoomScreen extends ConsumerWidget {
                   const SizedBox(height: 14),
                   _BuddyActionBar(
                     visualTheme: visualTheme,
+                    activity: roomState.activity,
+                    isConversationModeEnabled:
+                        roomState.isConversationModeEnabled,
                     isListening: roomState.isListening,
                     isProcessing: roomState.isProcessing,
                     isCapturingPhoto: roomState.isCapturingPhoto,
-                    onMicTap: () {
-                      if (roomState.isListening) {
-                        controller.stopListening();
+                    onPrimaryTap: () {
+                      if (roomState.activity == BuddyActivityState.talking ||
+                          roomState.isProcessing) {
+                        controller.interruptAndListen();
+                        return;
+                      }
+
+                      if (roomState.isConversationModeEnabled) {
+                        controller.stopRoomSession();
                       } else {
-                        controller.startVoiceQuestion();
+                        controller.startRoomSession();
                       }
                     },
                     onPhotoTap: controller.capturePhoto,
@@ -126,11 +152,19 @@ class BuddyRoomScreen extends ConsumerWidget {
       return 'Opening camera...';
     }
 
+    if (state.isProcessing) {
+      return 'Let me think...';
+    }
+
     switch (state.activity) {
       case BuddyActivityState.idle:
-        return state.capturedPhotoPath == null
-            ? 'Tap Talk and ask me.'
-            : 'Now ask me about the photo.';
+        if (state.capturedPhotoPath != null) {
+          return 'Ask me about the photo.';
+        }
+
+        return state.isConversationModeEnabled
+            ? 'I am ready. You can speak.'
+            : 'Tap Start to talk.';
       case BuddyActivityState.listening:
         return 'I am listening...';
       case BuddyActivityState.thinking:
@@ -402,7 +436,7 @@ class _CapturedPhotoPreview extends StatelessWidget {
           const SizedBox(width: 12),
           Expanded(
             child: Text(
-              'Photo added. Tap Talk and ask your buddy about it.',
+              'Photo added. Speak and ask your buddy about it.',
               style: TextStyle(
                 color: visualTheme.primaryColor,
                 fontSize: 14,
@@ -437,9 +471,9 @@ class _BuddySpeechPanel extends StatelessWidget {
       return _EmptySpeechHint(visualTheme: visualTheme);
     }
 
-    return Container(
+    return SizedBox(
       width: double.infinity,
-      constraints: const BoxConstraints(maxHeight: 170),
+      height: 170,
       child: SingleChildScrollView(
         child: Column(
           children: [
@@ -506,7 +540,7 @@ class _EmptySpeechHint extends StatelessWidget {
           const SizedBox(width: 12),
           Expanded(
             child: Text(
-              'Tap Talk and ask your buddy anything.',
+              'Your buddy will greet you. Then just speak naturally.',
               style: TextStyle(
                 color: visualTheme.primaryColor,
                 fontSize: 14,
@@ -593,24 +627,32 @@ class _SpeechBubble extends StatelessWidget {
 
 class _BuddyActionBar extends StatelessWidget {
   final BuddyVisualTheme visualTheme;
+  final BuddyActivityState activity;
+  final bool isConversationModeEnabled;
   final bool isListening;
   final bool isProcessing;
   final bool isCapturingPhoto;
-  final VoidCallback onMicTap;
+  final VoidCallback onPrimaryTap;
   final VoidCallback onPhotoTap;
 
   const _BuddyActionBar({
     required this.visualTheme,
+    required this.activity,
+    required this.isConversationModeEnabled,
     required this.isListening,
     required this.isProcessing,
     required this.isCapturingPhoto,
-    required this.onMicTap,
+    required this.onPrimaryTap,
     required this.onPhotoTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    final isBusy = isProcessing || isCapturingPhoto;
+    final isPhotoDisabled =
+        isCapturingPhoto ||
+        isListening ||
+        isProcessing ||
+        activity == BuddyActivityState.talking;
 
     return Container(
       width: double.infinity,
@@ -632,18 +674,19 @@ class _BuddyActionBar extends StatelessWidget {
       child: Row(
         children: [
           Expanded(
-            child: _PrimaryTalkButton(
+            child: _PrimaryVoiceButton(
               visualTheme: visualTheme,
-              isListening: isListening,
-              isDisabled: isBusy,
-              onTap: onMicTap,
+              activity: activity,
+              isConversationModeEnabled: isConversationModeEnabled,
+              isDisabled: isCapturingPhoto,
+              onTap: onPrimaryTap,
             ),
           ),
           const SizedBox(width: 12),
           _PhotoButton(
             visualTheme: visualTheme,
             isCapturingPhoto: isCapturingPhoto,
-            isDisabled: isBusy || isListening,
+            isDisabled: isPhotoDisabled,
             onTap: onPhotoTap,
           ),
         ],
@@ -652,18 +695,46 @@ class _BuddyActionBar extends StatelessWidget {
   }
 }
 
-class _PrimaryTalkButton extends StatelessWidget {
+class _PrimaryVoiceButton extends StatelessWidget {
   final BuddyVisualTheme visualTheme;
-  final bool isListening;
+  final BuddyActivityState activity;
+  final bool isConversationModeEnabled;
   final bool isDisabled;
   final VoidCallback onTap;
 
-  const _PrimaryTalkButton({
+  const _PrimaryVoiceButton({
     required this.visualTheme,
-    required this.isListening,
+    required this.activity,
+    required this.isConversationModeEnabled,
     required this.isDisabled,
     required this.onTap,
   });
+
+  String get _label {
+    if (activity == BuddyActivityState.talking ||
+        activity == BuddyActivityState.thinking) {
+      return 'Interrupt';
+    }
+
+    if (isConversationModeEnabled) {
+      return 'End';
+    }
+
+    return 'Start';
+  }
+
+  IconData get _icon {
+    if (activity == BuddyActivityState.talking ||
+        activity == BuddyActivityState.thinking) {
+      return Icons.pan_tool_rounded;
+    }
+
+    if (isConversationModeEnabled) {
+      return Icons.stop_rounded;
+    }
+
+    return Icons.mic_rounded;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -691,14 +762,10 @@ class _PrimaryTalkButton extends StatelessWidget {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(
-                isListening ? Icons.stop_rounded : Icons.mic_rounded,
-                color: Colors.white,
-                size: 34,
-              ),
+              Icon(_icon, color: Colors.white, size: 32),
               const SizedBox(width: 12),
               Text(
-                isListening ? 'Stop' : 'Talk',
+                _label,
                 style: const TextStyle(
                   color: Colors.white,
                   fontSize: 22,

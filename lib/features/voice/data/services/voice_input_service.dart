@@ -7,12 +7,18 @@ class VoiceInputService {
 
   bool _isInitialized = false;
 
+  void Function(String message)? _onError;
+  void Function(String status)? _onStatus;
+
   bool get isListening => _speech.isListening;
 
   Future<bool> initialize({
     void Function(String message)? onError,
     void Function(String status)? onStatus,
   }) async {
+    _onError = onError;
+    _onStatus = onStatus;
+
     if (_isInitialized) {
       return _speech.isAvailable;
     }
@@ -20,10 +26,10 @@ class VoiceInputService {
     _isInitialized = await _speech.initialize(
       debugLogging: true,
       onError: (SpeechRecognitionError error) {
-        onError?.call(error.errorMsg);
+        _onError?.call(error.errorMsg);
       },
       onStatus: (String status) {
-        onStatus?.call(status);
+        _onStatus?.call(status);
       },
     );
 
@@ -33,8 +39,9 @@ class VoiceInputService {
   Future<void> startListening({
     required void Function(String words, bool isFinal) onResult,
     void Function(String message)? onError,
+    void Function(String status)? onStatus,
   }) async {
-    final isAvailable = await initialize(onError: onError);
+    final isAvailable = await initialize(onError: onError, onStatus: onStatus);
 
     if (!isAvailable) {
       onError?.call('Speech recognition is not available.');
