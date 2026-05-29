@@ -108,6 +108,9 @@ class BuddyRoomController extends Notifier<BuddyRoomState> {
   Timer? _speechSilenceTimer;
   var _isHandlingFinalSpeech = false;
 
+  var _isRoomActive = false;
+  var _sessionToken = 0;
+
   @override
   BuddyRoomState build() {
     _voiceInputService = ref.read(voiceInputServiceProvider);
@@ -118,7 +121,7 @@ class BuddyRoomController extends Notifier<BuddyRoomState> {
     _uuid = ref.read(uuidProvider);
 
     ref.onDispose(() {
-      _speechSilenceTimer?.cancel();
+      _invalidateSession();
       unawaited(_voiceInputService.cancelListening());
       unawaited(_voiceOutputService.stop());
     });
@@ -127,6 +130,10 @@ class BuddyRoomController extends Notifier<BuddyRoomState> {
   }
 
   Future<void> startRoomSession() async {
+    _isRoomActive = true;
+    _sessionToken++;
+    final sessionToken = _sessionToken;
+
     if (state.hasGreeted) {
       if (!state.isConversationModeEnabled) {
         state = state.copyWith(isConversationModeEnabled: true);
@@ -147,12 +154,24 @@ class BuddyRoomController extends Notifier<BuddyRoomState> {
 
     await _voiceOutputService.initialize(
       onStart: () {
+        if (!_isCurrentSession(sessionToken)) {
+          return;
+        }
+
         state = state.copyWith(activity: BuddyActivityState.talking);
       },
       onComplete: () {
+        if (!_isCurrentSession(sessionToken)) {
+          return;
+        }
+
         state = state.copyWith(activity: BuddyActivityState.idle);
 
         Future<void>.delayed(const Duration(milliseconds: 350), () {
+          if (!_isCurrentSession(sessionToken)) {
+            return;
+          }
+
           if (state.isConversationModeEnabled &&
               !state.isListening &&
               !state.isProcessing &&
@@ -162,6 +181,10 @@ class BuddyRoomController extends Notifier<BuddyRoomState> {
         });
       },
       onError: (message) {
+        if (!_isCurrentSession(sessionToken)) {
+          return;
+        }
+
         state = state.copyWith(
           activity: BuddyActivityState.idle,
           errorMessage: message,
@@ -169,17 +192,22 @@ class BuddyRoomController extends Notifier<BuddyRoomState> {
       },
     );
 
+    if (!_isCurrentSession(sessionToken)) {
+      return;
+    }
+
     await _voiceOutputService.speak(greeting);
   }
 
-  Future<void> stopRoomSession() async {
-    _speechSilenceTimer?.cancel();
+  Future<void> stopRoomSession({bool resetGreeting = false}) async {
+    _invalidateSession();
 
     await _voiceInputService.cancelListening();
     await _voiceOutputService.stop();
 
     state = state.copyWith(
       activity: BuddyActivityState.idle,
+      hasGreeted: resetGreeting ? false : null,
       isConversationModeEnabled: false,
       isListening: false,
       isProcessing: false,
@@ -187,10 +215,21 @@ class BuddyRoomController extends Notifier<BuddyRoomState> {
   }
 
   Future<void> interruptAndListen() async {
+    if (!_isRoomActive) {
+      _isRoomActive = true;
+      _sessionToken++;
+    }
+
+    final sessionToken = _sessionToken;
+
     _speechSilenceTimer?.cancel();
 
     await _voiceOutputService.stop();
     await _voiceInputService.cancelListening();
+
+    if (!_isCurrentSession(sessionToken)) {
+      return;
+    }
 
     state = state.copyWith(
       activity: BuddyActivityState.idle,
@@ -201,18 +240,31 @@ class BuddyRoomController extends Notifier<BuddyRoomState> {
     );
 
     await Future<void>.delayed(const Duration(milliseconds: 150));
-    await startVoiceQuestion();
+
+    if (_isCurrentSession(sessionToken)) {
+      await startVoiceQuestion();
+    }
   }
 
   Future<void> startVoiceQuestion() async {
+    if (!_isRoomActive) {
+      return;
+    }
+
     if (state.isProcessing || state.isListening || state.isCapturingPhoto) {
       return;
     }
+
+    final sessionToken = _sessionToken;
 
     _speechSilenceTimer?.cancel();
     _isHandlingFinalSpeech = false;
 
     await _voiceOutputService.stop();
+
+    if (!_isCurrentSession(sessionToken)) {
+      return;
+    }
 
     state = state.copyWith(
       activity: BuddyActivityState.listening,
@@ -225,17 +277,27 @@ class BuddyRoomController extends Notifier<BuddyRoomState> {
 
     await _voiceInputService.startListening(
       onResult: (words, isFinal) {
-        state = state.copyWith(recognizedText: words);
-
-        if (isFinal) {
-          unawaited(_handleFinalSpeech(words));
+        if (!_isCurrentSession(sessionToken)) {
           return;
         }
 
-        _scheduleSpeechFinalization();
+        state = state.copyWith(recognizedText: words);
+
+        if (isFinal) {
+          unawaited(_handleFinalSpeech(words, sessionToken));
+          return;
+        }
+
+        _scheduleSpeechFinalization(sessionToken);
       },
-      onStatus: _handleSpeechStatus,
+      onStatus: (status) {
+        _handleSpeechStatus(status, sessionToken);
+      },
       onError: (message) {
+        if (!_isCurrentSession(sessionToken)) {
+          return;
+        }
+
         _speechSilenceTimer?.cancel();
 
         state = state.copyWith(
@@ -246,13 +308,17 @@ class BuddyRoomController extends Notifier<BuddyRoomState> {
         );
 
         if (state.isConversationModeEnabled) {
-          _restartListeningAfterShortPause();
+          _restartListeningAfterShortPause(sessionToken);
         }
       },
     );
   }
 
-  void _handleSpeechStatus(String status) {
+  void _handleSpeechStatus(String status, int sessionToken) {
+    if (!_isCurrentSession(sessionToken)) {
+      return;
+    }
+
     final normalizedStatus = status.toLowerCase();
 
     final isTerminalStatus =
@@ -268,10 +334,10 @@ class BuddyRoomController extends Notifier<BuddyRoomState> {
       return;
     }
 
-    unawaited(_handleFinalSpeech(words));
+    unawaited(_handleFinalSpeech(words, sessionToken));
   }
 
-  void _scheduleSpeechFinalization() {
+  void _scheduleSpeechFinalization(int sessionToken) {
     _speechSilenceTimer?.cancel();
 
     final words = state.recognizedText.trim();
@@ -281,6 +347,10 @@ class BuddyRoomController extends Notifier<BuddyRoomState> {
     }
 
     _speechSilenceTimer = Timer(const Duration(seconds: 2), () {
+      if (!_isCurrentSession(sessionToken)) {
+        return;
+      }
+
       if (!state.isListening || _isHandlingFinalSpeech) {
         return;
       }
@@ -291,16 +361,26 @@ class BuddyRoomController extends Notifier<BuddyRoomState> {
         return;
       }
 
-      unawaited(_handleFinalSpeech(latestWords));
+      unawaited(_handleFinalSpeech(latestWords, sessionToken));
     });
   }
 
   Future<void> capturePhoto() async {
+    if (!_isRoomActive) {
+      return;
+    }
+
     if (state.isProcessing || state.isListening || state.isCapturingPhoto) {
       return;
     }
 
+    final sessionToken = _sessionToken;
+
     await _voiceOutputService.stop();
+
+    if (!_isCurrentSession(sessionToken)) {
+      return;
+    }
 
     state = state.copyWith(
       activity: BuddyActivityState.thinking,
@@ -311,6 +391,10 @@ class BuddyRoomController extends Notifier<BuddyRoomState> {
     try {
       final photo = await _photoPickerService.takePhotoWithCamera();
 
+      if (!_isCurrentSession(sessionToken)) {
+        return;
+      }
+
       if (photo == null) {
         state = state.copyWith(
           activity: BuddyActivityState.idle,
@@ -318,7 +402,7 @@ class BuddyRoomController extends Notifier<BuddyRoomState> {
         );
 
         if (state.isConversationModeEnabled) {
-          _restartListeningAfterShortPause();
+          _restartListeningAfterShortPause(sessionToken);
         }
 
         return;
@@ -331,9 +415,13 @@ class BuddyRoomController extends Notifier<BuddyRoomState> {
       );
 
       if (state.isConversationModeEnabled) {
-        _restartListeningAfterShortPause();
+        _restartListeningAfterShortPause(sessionToken);
       }
     } catch (error) {
+      if (!_isCurrentSession(sessionToken)) {
+        return;
+      }
+
       state = state.copyWith(
         activity: BuddyActivityState.idle,
         errorMessage: error.toString(),
@@ -341,7 +429,7 @@ class BuddyRoomController extends Notifier<BuddyRoomState> {
       );
 
       if (state.isConversationModeEnabled) {
-        _restartListeningAfterShortPause();
+        _restartListeningAfterShortPause(sessionToken);
       }
     }
   }
@@ -351,11 +439,16 @@ class BuddyRoomController extends Notifier<BuddyRoomState> {
   }
 
   Future<void> stopListening() async {
+    final sessionToken = _sessionToken;
     final words = state.recognizedText.trim();
 
     _speechSilenceTimer?.cancel();
 
     await _voiceInputService.stopListening();
+
+    if (!_isCurrentSession(sessionToken)) {
+      return;
+    }
 
     if (words.isEmpty) {
       state = state.copyWith(
@@ -364,22 +457,32 @@ class BuddyRoomController extends Notifier<BuddyRoomState> {
       );
 
       if (state.isConversationModeEnabled) {
-        _restartListeningAfterShortPause();
+        _restartListeningAfterShortPause(sessionToken);
       }
 
       return;
     }
 
-    await _handleFinalSpeech(words);
+    await _handleFinalSpeech(words, sessionToken);
   }
 
   Future<void> stopSpeaking() async {
     await _voiceOutputService.stop();
 
+    if (!_isRoomActive) {
+      return;
+    }
+
     state = state.copyWith(activity: BuddyActivityState.idle);
   }
 
   Future<void> askTextQuestion(String question) async {
+    final sessionToken = _sessionToken;
+
+    if (!_isCurrentSession(sessionToken)) {
+      return;
+    }
+
     final trimmedQuestion = question.trim();
 
     if (trimmedQuestion.isEmpty) {
@@ -391,7 +494,7 @@ class BuddyRoomController extends Notifier<BuddyRoomState> {
       );
 
       if (state.isConversationModeEnabled) {
-        _restartListeningAfterShortPause();
+        _restartListeningAfterShortPause(sessionToken);
       }
 
       return;
@@ -400,6 +503,10 @@ class BuddyRoomController extends Notifier<BuddyRoomState> {
     final capturedPhotoPath = state.capturedPhotoPath;
     final recentMessages = _recentContextMessages();
     final memoryContext = await _memoryContextForAi();
+
+    if (!_isCurrentSession(sessionToken)) {
+      return;
+    }
 
     state = state.copyWith(
       activity: BuddyActivityState.thinking,
@@ -442,6 +549,10 @@ Also use the recent conversation context if the child is replying to something y
         imagePath: capturedPhotoPath,
       );
 
+      if (!_isCurrentSession(sessionToken)) {
+        return;
+      }
+
       final answer = reply.reply.trim();
 
       if (answer.isEmpty) {
@@ -452,7 +563,7 @@ Also use the recent conversation context if the child is replying to something y
         );
 
         if (state.isConversationModeEnabled) {
-          _restartListeningAfterShortPause();
+          _restartListeningAfterShortPause(sessionToken);
         }
 
         return;
@@ -466,7 +577,15 @@ Also use the recent conversation context if the child is replying to something y
         emotion: reply.emotion,
       );
 
+      if (!_isCurrentSession(sessionToken)) {
+        return;
+      }
+
       await _saveMemoryCandidate(reply.memoryCandidate);
+
+      if (!_isCurrentSession(sessionToken)) {
+        return;
+      }
 
       state = state.copyWith(
         activity: BuddyActivityState.thinking,
@@ -477,12 +596,24 @@ Also use the recent conversation context if the child is replying to something y
 
       await _voiceOutputService.initialize(
         onStart: () {
+          if (!_isCurrentSession(sessionToken)) {
+            return;
+          }
+
           state = state.copyWith(activity: BuddyActivityState.talking);
         },
         onComplete: () {
+          if (!_isCurrentSession(sessionToken)) {
+            return;
+          }
+
           state = state.copyWith(activity: BuddyActivityState.celebrating);
 
           Future<void>.delayed(const Duration(milliseconds: 900), () async {
+            if (!_isCurrentSession(sessionToken)) {
+              return;
+            }
+
             if (state.activity != BuddyActivityState.celebrating) {
               return;
             }
@@ -495,6 +626,10 @@ Also use the recent conversation context if the child is replying to something y
 
             await Future<void>.delayed(const Duration(milliseconds: 300));
 
+            if (!_isCurrentSession(sessionToken)) {
+              return;
+            }
+
             if (state.isConversationModeEnabled &&
                 !state.isListening &&
                 !state.isProcessing &&
@@ -504,19 +639,31 @@ Also use the recent conversation context if the child is replying to something y
           });
         },
         onError: (message) {
+          if (!_isCurrentSession(sessionToken)) {
+            return;
+          }
+
           state = state.copyWith(
             activity: BuddyActivityState.idle,
             errorMessage: message,
           );
 
           if (state.isConversationModeEnabled) {
-            _restartListeningAfterShortPause();
+            _restartListeningAfterShortPause(sessionToken);
           }
         },
       );
 
+      if (!_isCurrentSession(sessionToken)) {
+        return;
+      }
+
       await _voiceOutputService.speak(answer);
     } catch (error) {
+      if (!_isCurrentSession(sessionToken)) {
+        return;
+      }
+
       state = state.copyWith(
         activity: BuddyActivityState.idle,
         errorMessage: error.toString(),
@@ -525,12 +672,16 @@ Also use the recent conversation context if the child is replying to something y
       );
 
       if (state.isConversationModeEnabled) {
-        _restartListeningAfterShortPause();
+        _restartListeningAfterShortPause(sessionToken);
       }
     }
   }
 
-  Future<void> _handleFinalSpeech(String words) async {
+  Future<void> _handleFinalSpeech(String words, int sessionToken) async {
+    if (!_isCurrentSession(sessionToken)) {
+      return;
+    }
+
     if (_isHandlingFinalSpeech) {
       return;
     }
@@ -543,6 +694,10 @@ Also use the recent conversation context if the child is replying to something y
 
       await _voiceInputService.stopListening();
 
+      if (!_isCurrentSession(sessionToken)) {
+        return;
+      }
+
       if (trimmedWords.isEmpty) {
         state = state.copyWith(
           activity: BuddyActivityState.idle,
@@ -551,7 +706,7 @@ Also use the recent conversation context if the child is replying to something y
         );
 
         if (state.isConversationModeEnabled) {
-          _restartListeningAfterShortPause();
+          _restartListeningAfterShortPause(sessionToken);
         }
 
         return;
@@ -563,8 +718,12 @@ Also use the recent conversation context if the child is replying to something y
     }
   }
 
-  void _restartListeningAfterShortPause() {
+  void _restartListeningAfterShortPause(int sessionToken) {
     Future<void>.delayed(const Duration(milliseconds: 600), () {
+      if (!_isCurrentSession(sessionToken)) {
+        return;
+      }
+
       if (state.isConversationModeEnabled &&
           !state.isListening &&
           !state.isProcessing &&
@@ -573,6 +732,17 @@ Also use the recent conversation context if the child is replying to something y
         unawaited(startVoiceQuestion());
       }
     });
+  }
+
+  void _invalidateSession() {
+    _isRoomActive = false;
+    _sessionToken++;
+    _isHandlingFinalSpeech = false;
+    _speechSilenceTimer?.cancel();
+  }
+
+  bool _isCurrentSession(int sessionToken) {
+    return _isRoomActive && _sessionToken == sessionToken;
   }
 
   String _greetingText() {
@@ -687,7 +857,6 @@ Do not reveal memory storage details to the child.
       await _chatRepository.saveMessage(message);
     } catch (_) {
       // Saving history should not break the live voice flow.
-      // Later we can add proper logging / retry UI.
     }
   }
 
@@ -735,7 +904,6 @@ Do not reveal memory storage details to the child.
       await _memoryRepository.saveMemory(memory);
     } catch (_) {
       // Memory save should not break the live conversation.
-      // The chat response has already been produced.
     }
   }
 

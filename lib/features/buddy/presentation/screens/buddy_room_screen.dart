@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:ai_buddy/features/buddy/domain/entities/buddy_definition.dart';
@@ -18,15 +19,52 @@ class BuddyRoomScreen extends ConsumerStatefulWidget {
 }
 
 class _BuddyRoomScreenState extends ConsumerState<BuddyRoomScreen> {
+  late final BuddyRoomController _controller;
+
+  var _canPop = false;
+  var _isLeavingRoom = false;
+
   @override
   void initState() {
     super.initState();
 
+    _controller = ref.read(buddyRoomControllerProvider(widget.buddy).notifier);
+
     Future.microtask(() {
-      ref
-          .read(buddyRoomControllerProvider(widget.buddy).notifier)
-          .startRoomSession();
+      _controller.startRoomSession();
     });
+  }
+
+  Future<void> _stopSessionAndLeave() async {
+    if (_isLeavingRoom) {
+      return;
+    }
+
+    _isLeavingRoom = true;
+
+    await _controller.stopRoomSession(resetGreeting: true);
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _canPop = true;
+    });
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+
+      Navigator.of(context).pop();
+    });
+  }
+
+  @override
+  void dispose() {
+    unawaited(_controller.stopRoomSession(resetGreeting: true));
+    super.dispose();
   }
 
   @override
@@ -34,110 +72,120 @@ class _BuddyRoomScreenState extends ConsumerState<BuddyRoomScreen> {
     final buddy = widget.buddy;
     final provider = buddyRoomControllerProvider(buddy);
     final roomState = ref.watch(provider);
-    final controller = ref.read(provider.notifier);
+    final controller = _controller;
     final visualTheme = buddy.visualTheme;
 
-    return Scaffold(
-      backgroundColor: visualTheme.backgroundColor,
-      appBar: AppBar(
-        backgroundColor: visualTheme.backgroundColor,
-        elevation: 0,
-        centerTitle: true,
-        title: Text(
-          buddy.name,
-          style: TextStyle(
-            color: visualTheme.primaryColor,
-            fontWeight: FontWeight.w900,
-          ),
-        ),
-        actions: [
-          IconButton(
-            onPressed: controller.stopSpeaking,
-            icon: Icon(
-              Icons.stop_circle_rounded,
-              color: visualTheme.primaryColor,
-            ),
-            tooltip: 'Stop speaking',
-          ),
-        ],
-      ),
-      body: SafeArea(
-        child: Stack(
-          children: [
-            _RoomBackground(visualTheme: visualTheme),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
-              child: Column(
-                children: [
-                  Expanded(
-                    child: _BuddyRoomStage(
-                      buddy: buddy,
-                      activity: roomState.activity,
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-                  Text(
-                    _statusText(roomState),
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: visualTheme.primaryColor,
-                      fontSize: 22,
-                      height: 1.2,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    visualTheme.roomSubtitle,
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 14,
-                      height: 1.25,
-                      color: Colors.grey.shade700,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  if (roomState.capturedPhotoPath != null) ...[
-                    _CapturedPhotoPreview(
-                      photoPath: roomState.capturedPhotoPath!,
-                      visualTheme: visualTheme,
-                      onRemoveTap: controller.clearCapturedPhoto,
-                    ),
-                    const SizedBox(height: 12),
-                  ],
-                  _BuddySpeechPanel(
-                    roomState: roomState,
-                    visualTheme: visualTheme,
-                  ),
-                  const SizedBox(height: 14),
-                  _BuddyActionBar(
-                    visualTheme: visualTheme,
-                    activity: roomState.activity,
-                    isConversationModeEnabled:
-                        roomState.isConversationModeEnabled,
-                    isListening: roomState.isListening,
-                    isProcessing: roomState.isProcessing,
-                    isCapturingPhoto: roomState.isCapturingPhoto,
-                    onPrimaryTap: () {
-                      if (roomState.activity == BuddyActivityState.talking ||
-                          roomState.isProcessing) {
-                        controller.interruptAndListen();
-                        return;
-                      }
+    return PopScope(
+      canPop: _canPop,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) {
+          return;
+        }
 
-                      if (roomState.isConversationModeEnabled) {
-                        controller.stopRoomSession();
-                      } else {
-                        controller.startRoomSession();
-                      }
-                    },
-                    onPhotoTap: controller.capturePhoto,
-                  ),
-                ],
+        unawaited(_stopSessionAndLeave());
+      },
+      child: Scaffold(
+        backgroundColor: visualTheme.backgroundColor,
+        appBar: AppBar(
+          backgroundColor: visualTheme.backgroundColor,
+          elevation: 0,
+          centerTitle: true,
+          title: Text(
+            buddy.name,
+            style: TextStyle(
+              color: visualTheme.primaryColor,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          actions: [
+            IconButton(
+              onPressed: controller.stopSpeaking,
+              icon: Icon(
+                Icons.stop_circle_rounded,
+                color: visualTheme.primaryColor,
               ),
+              tooltip: 'Stop speaking',
             ),
           ],
+        ),
+        body: SafeArea(
+          child: Stack(
+            children: [
+              _RoomBackground(visualTheme: visualTheme),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+                child: Column(
+                  children: [
+                    Expanded(
+                      child: _BuddyRoomStage(
+                        buddy: buddy,
+                        activity: roomState.activity,
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    Text(
+                      _statusText(roomState),
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: visualTheme.primaryColor,
+                        fontSize: 22,
+                        height: 1.2,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      visualTheme.roomSubtitle,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 14,
+                        height: 1.25,
+                        color: Colors.grey.shade700,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    if (roomState.capturedPhotoPath != null) ...[
+                      _CapturedPhotoPreview(
+                        photoPath: roomState.capturedPhotoPath!,
+                        visualTheme: visualTheme,
+                        onRemoveTap: controller.clearCapturedPhoto,
+                      ),
+                      const SizedBox(height: 12),
+                    ],
+                    _BuddySpeechPanel(
+                      roomState: roomState,
+                      visualTheme: visualTheme,
+                    ),
+                    const SizedBox(height: 14),
+                    _BuddyActionBar(
+                      visualTheme: visualTheme,
+                      activity: roomState.activity,
+                      isConversationModeEnabled:
+                          roomState.isConversationModeEnabled,
+                      isListening: roomState.isListening,
+                      isProcessing: roomState.isProcessing,
+                      isCapturingPhoto: roomState.isCapturingPhoto,
+                      onPrimaryTap: () {
+                        if (roomState.activity == BuddyActivityState.talking ||
+                            roomState.isProcessing) {
+                          controller.interruptAndListen();
+                          return;
+                        }
+
+                        if (roomState.isConversationModeEnabled) {
+                          controller.stopRoomSession();
+                        } else {
+                          controller.startRoomSession();
+                        }
+                      },
+                      onPhotoTap: controller.capturePhoto,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
