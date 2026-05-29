@@ -1,17 +1,25 @@
 import 'dart:async';
 
+import 'package:ai_buddy/core/providers/core_providers.dart';
 import 'package:ai_buddy/core/sync/sync_status.dart';
 import 'package:ai_buddy/features/ai/presentation/providers/ai_dependency_providers.dart';
 import 'package:ai_buddy/features/buddy/domain/entities/buddy_definition.dart';
 import 'package:ai_buddy/features/buddy/presentation/controllers/buddy_activity_state.dart';
 import 'package:ai_buddy/features/chat/domain/entities/message_entity.dart';
 import 'package:ai_buddy/features/chat/domain/entities/message_status.dart';
+import 'package:ai_buddy/features/chat/domain/repositories/chat_repository.dart';
+import 'package:ai_buddy/features/chat/presentation/providers/chat_dependency_providers.dart';
 import 'package:ai_buddy/features/media/data/services/photo_picker_service.dart';
 import 'package:ai_buddy/features/media/presentation/providers/media_dependency_providers.dart';
+import 'package:ai_buddy/features/memory/domain/entities/friend_memory_entity.dart';
+import 'package:ai_buddy/features/memory/domain/entities/memory_candidate_entity.dart';
+import 'package:ai_buddy/features/memory/domain/repositories/memory_repository.dart';
+import 'package:ai_buddy/features/memory/presentation/providers/memory_dependency_providers.dart';
 import 'package:ai_buddy/features/voice/data/services/voice_input_service.dart';
 import 'package:ai_buddy/features/voice/data/services/voice_output_service.dart';
 import 'package:ai_buddy/features/voice/presentation/providers/voice_dependency_providers.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:uuid/uuid.dart';
 
 final buddyRoomControllerProvider =
     NotifierProvider.family<
@@ -86,12 +94,16 @@ class BuddyRoomController extends Notifier<BuddyRoomState> {
 
   static const _localUserId = 'local_child';
   static const _maxContextMessages = 12;
+  static const _maxMemoryContextItems = 8;
 
   final BuddyDefinition buddy;
 
   late final VoiceInputService _voiceInputService;
   late final VoiceOutputService _voiceOutputService;
   late final PhotoPickerService _photoPickerService;
+  late final ChatRepository _chatRepository;
+  late final MemoryRepository _memoryRepository;
+  late final Uuid _uuid;
 
   Timer? _speechSilenceTimer;
   var _isHandlingFinalSpeech = false;
@@ -101,6 +113,9 @@ class BuddyRoomController extends Notifier<BuddyRoomState> {
     _voiceInputService = ref.read(voiceInputServiceProvider);
     _voiceOutputService = ref.read(voiceOutputServiceProvider);
     _photoPickerService = ref.read(photoPickerServiceProvider);
+    _chatRepository = ref.read(chatRepositoryProvider);
+    _memoryRepository = ref.read(memoryRepositoryProvider);
+    _uuid = ref.read(uuidProvider);
 
     ref.onDispose(() {
       _speechSilenceTimer?.cancel();
@@ -122,9 +137,6 @@ class BuddyRoomController extends Notifier<BuddyRoomState> {
 
     final greeting = _greetingText();
 
-    // Important:
-    // We keep activity as idle here because TTS has not started yet.
-    // The mascot should start talking only from the TTS onStart callback.
     state = state.copyWith(
       hasGreeted: true,
       isConversationModeEnabled: true,
@@ -387,6 +399,7 @@ class BuddyRoomController extends Notifier<BuddyRoomState> {
 
     final capturedPhotoPath = state.capturedPhotoPath;
     final recentMessages = _recentContextMessages();
+    final memoryContext = await _memoryContextForAi();
 
     state = state.copyWith(
       activity: BuddyActivityState.thinking,
@@ -423,7 +436,7 @@ Also use the recent conversation context if the child is replying to something y
 ''';
 
       final reply = await aiRepository.generateReply(
-        systemPrompt: buddy.systemPrompt,
+        systemPrompt: _systemPromptWithMemory(memoryContext),
         recentMessages: recentMessages,
         currentMessage: currentMessage,
         imagePath: capturedPhotoPath,
@@ -445,7 +458,7 @@ Also use the recent conversation context if the child is replying to something y
         return;
       }
 
-      final updatedConversation = _appendTurnToContext(
+      final updatedConversation = await _appendTurnToContext(
         userText: capturedPhotoPath == null
             ? trimmedQuestion
             : '[Photo attached] $trimmedQuestion',
@@ -453,10 +466,8 @@ Also use the recent conversation context if the child is replying to something y
         emotion: reply.emotion,
       );
 
-      // Important:
-      // We do NOT set activity to talking here.
-      // TTS may take a moment to start, so mascot should begin talking only
-      // when flutter_tts fires the onStart callback.
+      await _saveMemoryCandidate(reply.memoryCandidate);
+
       state = state.copyWith(
         activity: BuddyActivityState.thinking,
         answerText: answer,
@@ -579,6 +590,48 @@ Also use the recent conversation context if the child is replying to something y
     }
   }
 
+  String _systemPromptWithMemory(String memoryContext) {
+    if (memoryContext.trim().isEmpty) {
+      return buddy.systemPrompt;
+    }
+
+    return '''
+${buddy.systemPrompt}
+
+Useful long-term memories about this child for this buddy:
+$memoryContext
+
+Use these memories only when they help the current answer.
+Do not mention that you are using saved memories.
+Do not reveal memory storage details to the child.
+''';
+  }
+
+  Future<String> _memoryContextForAi() async {
+    try {
+      final memories = await _memoryRepository.getMemories(friendId: buddy.id);
+
+      final usefulMemories =
+          memories
+              .where((memory) => !memory.isDeleted)
+              .where((memory) => memory.text.trim().isNotEmpty)
+              .where((memory) => memory.category != MemoryCategory.none)
+              .toList()
+            ..sort((a, b) => b.importance.compareTo(a.importance));
+
+      if (usefulMemories.isEmpty) {
+        return '';
+      }
+
+      return usefulMemories
+          .take(_maxMemoryContextItems)
+          .map((memory) => '- ${memory.text.trim()}')
+          .join('\n');
+    } catch (_) {
+      return '';
+    }
+  }
+
   List<MessageEntity> _recentContextMessages() {
     final messages = state.conversationMessages;
 
@@ -589,27 +642,30 @@ Also use the recent conversation context if the child is replying to something y
     return messages.sublist(messages.length - _maxContextMessages);
   }
 
-  List<MessageEntity> _appendTurnToContext({
+  Future<List<MessageEntity>> _appendTurnToContext({
     required String userText,
     required String buddyText,
     required String emotion,
-  }) {
+  }) async {
     final now = DateTime.now();
 
     final userMessage = _contextMessage(
-      id: 'local-user-${now.microsecondsSinceEpoch}',
+      id: _uuid.v4(),
       sender: MessageSender.user,
       text: userText,
       createdAt: now,
     );
 
     final buddyMessage = _contextMessage(
-      id: 'local-buddy-${now.microsecondsSinceEpoch}',
+      id: _uuid.v4(),
       sender: MessageSender.buddy,
       text: buddyText,
       emotion: emotion,
       createdAt: now.add(const Duration(milliseconds: 1)),
     );
+
+    await _saveMessageToDb(userMessage);
+    await _saveMessageToDb(buddyMessage);
 
     final updatedMessages = [
       ...state.conversationMessages,
@@ -624,6 +680,63 @@ Also use the recent conversation context if the child is replying to something y
     return updatedMessages.sublist(
       updatedMessages.length - _maxContextMessages,
     );
+  }
+
+  Future<void> _saveMessageToDb(MessageEntity message) async {
+    try {
+      await _chatRepository.saveMessage(message);
+    } catch (_) {
+      // Saving history should not break the live voice flow.
+      // Later we can add proper logging / retry UI.
+    }
+  }
+
+  Future<void> _saveMemoryCandidate(
+    MemoryCandidateEntity memoryCandidate,
+  ) async {
+    if (!memoryCandidate.canBeSaved) {
+      return;
+    }
+
+    final memoryText = memoryCandidate.text.trim();
+
+    if (memoryText.isEmpty) {
+      return;
+    }
+
+    try {
+      final existingMemories = await _memoryRepository.getMemories(
+        friendId: buddy.id,
+      );
+
+      final alreadyExists = existingMemories.any((memory) {
+        return !memory.isDeleted &&
+            memory.text.trim().toLowerCase() == memoryText.toLowerCase();
+      });
+
+      if (alreadyExists) {
+        return;
+      }
+
+      final now = DateTime.now();
+
+      final memory = FriendMemoryEntity(
+        id: _uuid.v4(),
+        userId: _localUserId,
+        friendId: buddy.id,
+        text: memoryText,
+        category: memoryCandidate.category,
+        importance: memoryCandidate.importance,
+        syncStatus: SyncStatus.pendingCreate,
+        createdAt: now,
+        updatedAt: now,
+      );
+
+      await _memoryRepository.saveMemory(memory);
+    } catch (_) {
+      // Memory save should not break the live conversation.
+      // The chat response has already been produced.
+    }
   }
 
   MessageEntity _contextMessage({
@@ -642,7 +755,7 @@ Also use the recent conversation context if the child is replying to something y
       text: text,
       emotion: emotion,
       status: MessageStatus.sent,
-      syncStatus: SyncStatus.synced,
+      syncStatus: SyncStatus.pendingCreate,
       createdAt: createdAt,
       updatedAt: createdAt,
     );

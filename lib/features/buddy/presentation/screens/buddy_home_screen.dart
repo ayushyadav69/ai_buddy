@@ -2,6 +2,7 @@ import 'package:ai_buddy/features/buddy/domain/entities/default_buddies.dart';
 import 'package:ai_buddy/features/buddy/presentation/screens/buddy_room_screen.dart';
 import 'package:ai_buddy/features/buddy/presentation/widgets/buddy_home_card.dart';
 import 'package:flutter/material.dart';
+import 'package:ai_buddy/features/parent/presentation/screens/parent_profile_screen.dart';
 
 class BuddyHomeScreen extends StatelessWidget {
   const BuddyHomeScreen({super.key});
@@ -27,7 +28,11 @@ class BuddyHomeScreen extends StatelessWidget {
                       children: [
                         _HomeHeader(
                           onProfileTap: () {
-                            // Later: profile / parent area / history.
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => const ParentProfileScreen(),
+                              ),
+                            );
                           },
                         ),
                         const SizedBox(height: 22),
